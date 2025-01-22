@@ -1,0 +1,10 @@
+[package]
+name = "eveicongenerator"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+evesharedcache = { path = "../evesharedcache" }
+reqwest = { version = "0.12.12", features = ["blocking"] }
+zip = "2.2.2"
