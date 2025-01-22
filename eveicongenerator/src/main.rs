@@ -19,7 +19,6 @@ pub mod icons {
     use std::path::{Path, PathBuf};
     use std::process::{Command, ExitStatusError};
     use evesharedcache::cache::{CacheError, SharedCache};
-    use evesharedcache::fsd::{FSDError};
 
     // Industry "reaction" blueprints use a different background
     const REACTION_GROUPS: [u32; 4] = [1888, 1889, 1890, 4097];
@@ -60,7 +59,7 @@ pub mod icons {
 
     #[derive(Debug)]
     pub enum IconError {
-        FSD(FSDError),
+        Cache(CacheError),
         IO(io::Error),
         Magick(ExitStatusError),
         String(String)
@@ -69,7 +68,7 @@ pub mod icons {
     impl Display for IconError {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             match self {
-                IconError::FSD(err) => Display::fmt(err, f),
+                IconError::Cache(err) => Display::fmt(err, f),
                 IconError::IO(err) => Display::fmt(err, f),
                 IconError::Magick(err) => write!(f, "error in call to image magick {}", err),
                 IconError::String(msg) => Display::fmt(msg, f)
@@ -80,7 +79,7 @@ pub mod icons {
     impl Error for IconError {
         fn source(&self) -> Option<&(dyn Error + 'static)> {
             match self {
-                IconError::FSD(err) => Some(err),
+                IconError::Cache(err) => Some(err),
                 IconError::IO(err) => Some(err),
                 IconError::Magick(err) => Some(err),
                 IconError::String(_) => None
@@ -88,15 +87,9 @@ pub mod icons {
         }
     }
 
-    impl From<FSDError> for IconError {
-        fn from(value: FSDError) -> Self {
-            IconError::FSD(value)
-        }
-    }
-
     impl From<CacheError> for IconError {
         fn from(value: CacheError) -> Self {
-            IconError::FSD(FSDError::Cache(value))
+            IconError::Cache(value)
         }
     }
 
