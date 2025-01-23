@@ -314,18 +314,19 @@ pub mod sde {
 fn main() -> Result<(), io::Error> {
     let mut download = true;
     let new_version = get_fsd_checksum()?;
-    if fs::exists("./fsd.zip")? && fs::exists("./checksum.txt")? {
-        let current_version = fs::read_to_string("./checksum.txt")?;
+    if fs::exists("./cache/fsd.zip")? && fs::exists("./cache/checksum.txt")? {
+        let current_version = fs::read_to_string("./cache/checksum.txt")?;
         download = (current_version != new_version);
     }
     if download {
         println!("Downloading new SDE...");
-        fs::write("./checksum.txt", new_version)?;  // Store checksum in another file; The checksum is over the (unzipped) contents of the archive, not the archive itself, and so is hard/slow to calculate
-        download_fsd(&mut File::create("./fsd.zip")?)?;
+        fs::create_dir_all("./cache")?;
+        fs::write("./cache/checksum.txt", new_version)?;  // Store checksum in another file; The checksum is over the (unzipped) contents of the archive, not the archive itself, and so is hard/slow to calculate
+        download_fsd(&mut File::create("./cache/fsd.zip")?)?;
     }
     println!("SDE up to date!");
 
-    let mut fsd = ZipArchive::new(File::open("./fsd.zip")?)?;
+    let mut fsd = ZipArchive::new(File::open("./cache/fsd.zip")?)?;
 
     // Parsing the SDEs YAML properly is rather slow and fragile as the SDE is not entirely spec-compliant, so we just directly extract the fields we need.
     println!("\tLoading types...");
@@ -424,7 +425,7 @@ fn main() -> Result<(), io::Error> {
     println!("Icons built in: {} seconds", start.elapsed().as_secs_f64());
 
     // Delete unnecessary cache files to avoid a storage "leak"
-    cache.purge()?;
+    cache.purge(&["fsd.zip", "checksum.txt"])?;
 
     Ok(())
 }

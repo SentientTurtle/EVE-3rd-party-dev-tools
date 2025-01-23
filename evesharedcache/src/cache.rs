@@ -350,28 +350,30 @@ impl CacheDownloader {
     /// Used to clean up files from older versions of the game
     ///
     /// WARNING: Deletes files in the directory this instance of [`CacheDownloader`] has been initialized to, including any not created by this tool
-    pub fn purge(&self) -> Result<(), io::Error> {
+    pub fn purge(&self, keep_files: &[&str]) -> Result<(), io::Error> {
         let valid_paths = self.res_index.values()
             .chain(self.app_index.values())
             .map(|entry| &*entry.path)
             .collect::<HashSet<&str>>();
 
+        let client_index = format!("eveonline_{}.txt", self.client_version);
+
         for parent_entry in fs::read_dir(&self.cache_dir)? {
             let parent_entry = parent_entry?;
             let parent_dir = parent_entry.file_name();  // Split for ownership
-            let parent_dir = parent_dir.to_str().unwrap();
+            let parent_name = parent_dir.to_str().unwrap();
 
             if parent_entry.file_type()?.is_dir() {
                 for file_entry in fs::read_dir(parent_entry.path())? {
                     let file_entry = file_entry?;
-                    let file_path = format!("{}/{}", parent_dir, &file_entry.file_name().to_str().unwrap());
+                    let file_path = format!("{}/{}", parent_name, &file_entry.file_name().to_str().unwrap());
 
                     if !valid_paths.contains(&*file_path.to_ascii_lowercase()) {
                         fs::remove_file(file_entry.path())?;
                     }
                 }
             } else {
-                if parent_dir != format!("eveonline_{}.txt", self.client_version) {
+                if parent_name != client_index && !keep_files.contains(&parent_name) {
                     fs::remove_file(parent_entry.path())?;
                 }
             }
