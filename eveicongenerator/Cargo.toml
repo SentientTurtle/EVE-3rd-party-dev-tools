@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+# FSD parsing requires running windows-only binary python libraries. Running these on other platforms is non-trivial
+enable_fsd = ["evesharedcache/enable_fsd"]
+
 [dependencies]
 evesharedcache = { path = "../evesharedcache" }
 reqwest = { version = "0.12.12", features = ["blocking"] }
 zip = "2.2.2"
+yaml-rust2 = "0.10.0"
+clap = "4.5.29"

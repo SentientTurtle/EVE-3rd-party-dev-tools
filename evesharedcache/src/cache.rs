@@ -95,7 +95,7 @@ impl IndexEntry {
             if line.trim().is_empty() {
                 continue;
             }
-            // skip 6th field
+            // skip 6th field, which are the filesystem permissions
             let [resource, path, md5, size, compressed] = line.splitn(6, ',')
                 .next_chunk()
                 .map_err(|_| CacheError::MalformedIndexFile)?;
