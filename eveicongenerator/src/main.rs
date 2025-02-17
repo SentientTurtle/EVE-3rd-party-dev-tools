@@ -1,5 +1,6 @@
 #![feature(exit_status_error)]
 #![feature(iter_intersperse)]
+#![feature(path_add_extension)]
 
 use crate::icons::{IconBuildData, OutputMode};
 use crate::sde::update_sde;
@@ -10,6 +11,19 @@ use std::path::PathBuf;
 use clap::{Arg, ArgAction, Command};
 use clap::builder::ValueParser;
 
+pub mod util {
+    use std::fmt::{Display, Formatter};
+
+    pub struct HexDisplay<const N: usize>(pub [u8; N]);
+    impl<const N: usize> Display for HexDisplay<N> {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            for byte in self.0 {
+                write!(f, "{:x}", byte)?;
+            }
+            Ok(())
+        }
+    }
+}
 pub mod icons;
 pub mod sde;
 
@@ -48,6 +62,10 @@ fn main() -> Result<(), io::Error> {
             Arg::new("use_magick")
                 .long("use_magick")
                 .help("Use imagemagick 7 for image compositing")
+                .action(ArgAction::SetTrue),
+            Arg::new("deduplicate")
+                .long("deduplicate")
+                .help("Deduplicate output")
                 .action(ArgAction::SetTrue)
         ])
         .get_matches();
@@ -125,7 +143,7 @@ fn main() -> Result<(), io::Error> {
     println!("Building icons...");
     let build_start = Instant::now();
     let (added, updated, removed) = icons::build_icon_export(
-        &[OutputMode::Archive],
+        &[OutputMode::Archive { deduplicate: arg_matches.get_flag("deduplicate") }],
         &icon_build_data,
         &cache,
         arg_matches.get_one::<PathBuf>("icon_folder").expect("icon_folder is a required argument"),

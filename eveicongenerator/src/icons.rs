@@ -10,8 +10,10 @@ use std::io::{BufRead, BufReader};
 use image::imageops::FilterType;
 use image::{imageops, ImageReader};
 use image_blend::BufferBlend;
+use md5::{Digest, Md5};
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipWriter};
+use crate::util::HexDisplay;
 
 // Industry "reaction" blueprints use a different background
 const REACTION_GROUPS: [u32; 4] = [1888, 1889, 1890, 4097];
@@ -122,7 +124,7 @@ impl IconBuildData {
 }
 
 pub enum OutputMode {
-    Archive
+    Archive { deduplicate: bool }
 }
 
 fn composite_tech(icon: &Path, tech_icon: &Path, out: &Path, use_magick: bool) -> Result<(), IconError> {
@@ -200,6 +202,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
         };
     }
 
+    let mut service_metadata = HashMap::<u32, HashMap<&'static str, String>>::new();
     let mut new_index = HashMap::<String, String>::new();
     let mut updated_images = HashSet::<String>::new();
 
@@ -227,27 +230,32 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                 if cache.has_resource(&*icon_resource_bp) && !USE_ICON_INSTEAD_OF_GRAPHIC_GROUPS.contains(&type_info.group_id) {
                     if let Some(techicon) = techicon_resource_for_metagroup(type_info.meta_group_id.unwrap_or(1)) {
                         let filename = format!("{}_64.png", type_id);
-                        // NOTE: single-pipe OR required here as is_up_to_date has essential side effects
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bp, techicon], force_rebuild) {
+                        service_metadata.entry(*type_id).or_default().insert("icon", filename.clone());
+                        service_metadata.entry(*type_id).or_default().insert("bp", filename.clone());
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&icon_resource_bp)?, cache.hash_of(techicon)?], force_rebuild) {
                             composite_tech(&cache.path_of(&*icon_resource_bp)?, &cache.path_of(techicon)?, &icon_dir.join(filename), use_magick)?;
                         }
 
                         if cache.has_resource(&*icon_resource_bpc) {
                             let filename = format!("{}_64_bpc.png", type_id);
-                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bpc, techicon], force_rebuild) {
+                            service_metadata.entry(*type_id).or_default().insert("bpc", filename.clone());
+                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&icon_resource_bpc)?, cache.hash_of(techicon)?], force_rebuild) {
                                 composite_tech(&cache.path_of(&*icon_resource_bpc)?, &cache.path_of(techicon)?, &icon_dir.join(filename), use_magick)?;
                             }
                         }
                     } else {
                         let filename = format!("{}_64.png", type_id);
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bp], force_rebuild) {
+                        service_metadata.entry(*type_id).or_default().insert("icon", filename.clone());
+                        service_metadata.entry(*type_id).or_default().insert("bp", filename.clone());
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&icon_resource_bp)?], force_rebuild) {
                             fs::copy(cache.path_of(&*icon_resource_bp)?, icon_dir.join(filename))?;
                         }
 
                         if cache.has_resource(&*icon_resource_bpc) {
                             let filename = format!("{}_64_bpc.png", type_id);
-                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bpc], force_rebuild) {
-                                fs::copy(cache.path_of(&*icon_resource_bpc)?, icon_dir.join(format!("{}_64_bpc.png", type_id)))?;
+                            service_metadata.entry(*type_id).or_default().insert("bpc", filename.clone());
+                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&icon_resource_bpc)?], force_rebuild) {
+                                fs::copy(cache.path_of(&*icon_resource_bpc)?, icon_dir.join(filename))?;
                             }
                         }
                     }
@@ -259,7 +267,9 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                     let filename = format!("{}_64.png", type_id);
 
                     if category_id == 34 {
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "relic", tech_overlay.unwrap_or("")], force_rebuild) {
+                        service_metadata.entry(*type_id).or_default().insert("icon", filename.clone());
+                        service_metadata.entry(*type_id).or_default().insert("relic", filename.clone());
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(icon_resource)?, "relic", tech_overlay.map(|res| cache.hash_of(res)).transpose()?.unwrap_or("")], force_rebuild) {
                             // Relic BG/overlay
                             composite_blueprint(
                                 &cache.path_of("res:/ui/texture/icons/relic.png")?,
@@ -271,7 +281,10 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                             )?;
                         }
                     } else if REACTION_GROUPS.contains(&type_info.group_id) {
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "reaction", tech_overlay.unwrap_or("")], force_rebuild) {
+                        service_metadata.entry(*type_id).or_default().insert("icon", filename.clone());
+                        service_metadata.entry(*type_id).or_default().insert("reaction", filename.clone());
+                        service_metadata.entry(*type_id).or_default().insert("bp", filename.clone());   // Incorrect behaviour of the image service, included for compatibility
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(icon_resource)?, "reaction", tech_overlay.map(|res| cache.hash_of(res)).transpose()?.unwrap_or("")], force_rebuild) {
                             // Reaction BG/overlay
                             composite_blueprint(
                                 &cache.path_of("res:/ui/texture/icons/reaction.png")?,
@@ -284,7 +297,9 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                         }
                     } else {
                         // BP & BPC BG/overlay
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "bpo", tech_overlay.unwrap_or("")], force_rebuild) {
+                        service_metadata.entry(*type_id).or_default().insert("icon", filename.clone());
+                        service_metadata.entry(*type_id).or_default().insert("bp", filename.clone());
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&icon_resource)?, "bpo", tech_overlay.map(|res| cache.hash_of(res)).transpose()?.unwrap_or("")], force_rebuild) {
                             composite_blueprint(
                                 &cache.path_of("res:/ui/texture/icons/bpo.png")?,
                                 &cache.path_of("res:/ui/texture/icons/bpo_overlay.png")?,
@@ -296,7 +311,8 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                         }
 
                         let filename = format!("{}_64_bpc.png", type_id);
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "bpc", tech_overlay.unwrap_or("")], force_rebuild) {
+                        service_metadata.entry(*type_id).or_default().insert("bpc", filename.clone());
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(icon_resource)?, "bpc", tech_overlay.map(|res| cache.hash_of(res)).transpose()?.unwrap_or("")], force_rebuild) {
                             composite_blueprint(
                                 &cache.path_of("res:/ui/texture/icons/bpc.png")?,
                                 &cache.path_of("res:/ui/texture/icons/bpc_overlay.png")?,
@@ -309,14 +325,13 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                     }
                 } else {
                     // Skip missing icons, sometimes they're broken in-game.
-                    println!("ERR: Missing icon for: {}", type_id);
+                    println!("\tERR: Missing icon for: {}", type_id);
                 }
             } else {
                 continue; // No icon to be generated here
             }
         } else {
             // Regular item
-
             let graphic_iconinfo = type_info.graphic_id.and_then(|graphic_id| data.graphics_folders.get(&graphic_id));
 
             let mut icon_resource;
@@ -331,11 +346,13 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                     }
                 }
 
-                let filename = format!("{}_512.jpg", type_id);
                 let render_resource = format!("{}/{}_512.jpg", folder.trim_end_matches('/'), type_info.graphic_id.unwrap());
-                // Intentional short-circuit; If no resource we skip the type as having no icon, and do not update indices
-                if cache.has_resource(&*render_resource) && !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*render_resource], force_rebuild) {
-                    fs::copy(cache.path_of(&*render_resource)?, icon_dir.join(filename))?;
+                if cache.has_resource(&*render_resource) {
+                    let filename = format!("{}_512.jpg", type_id);
+                    service_metadata.entry(*type_id).or_default().insert("render", filename.clone());
+                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&render_resource)?], force_rebuild) {
+                        fs::copy(cache.path_of(&*render_resource)?, icon_dir.join(filename))?;
+                    }
                 }
             } else if let Some(icon) = type_info.icon_id {
                 icon_resource = data.icon_files.get(&icon).ok_or(IconError::String(format!("unknown icon id: {}", icon)))?.clone();
@@ -352,17 +369,18 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
 
             if cache.has_resource(&icon_resource) {
                 let filename = format!("{}_64.png", type_id);
+                service_metadata.entry(*type_id).or_default().insert("icon", filename.clone());
                 if let Some(techicon) = techicon_resource_for_metagroup(type_info.meta_group_id.unwrap_or(1)) {
-                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, techicon], force_rebuild) {
+                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&*icon_resource)?, cache.hash_of(techicon)?], force_rebuild) {
                         composite_tech(&cache.path_of(&icon_resource)?, &cache.path_of(techicon)?, &icon_dir.join(filename), use_magick)?
                     }
                 } else {
-                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource], force_rebuild) {
+                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[cache.hash_of(&*icon_resource)?], force_rebuild) {
                         fs::copy(cache.path_of(&*icon_resource)?, icon_dir.join(filename))?;
                     }
                 }
             } else {
-                println!("ERR: Missing icon for: {}", type_id);
+                println!("\tERR: Missing icon for: {}", type_id);
                 continue; // Skip missing icons, sometimes they're broken in-game.
             }
         }
@@ -390,14 +408,62 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
 
     for output in outputs {
         match output {
-            OutputMode::Archive => {
-                // Regenerate bulk zip
+            OutputMode::Archive { deduplicate } => {
                 let mut writer = ZipWriter::new(File::create(icon_dir.join("archive.zip"))?);
-                for filename in new_index.keys() {
-                    // Use stored compression, as image files are already compressed themselves.
-                    writer.start_file_from_path(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
-                    io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
+                if *deduplicate {
+                    // Copy the icons de-duplicated; Types with the same icon share one file
+                    let mut cache_to_md5 = HashMap::<String, String>::new();
+                    let mut file_to_md5 = HashMap::<String, String>::new();
+                    let mut seen_md5 = HashSet::<String>::new();
+                    for (filename, pseudo_hash) in &new_index {
+                        if let Some(md5) = cache_to_md5.get(pseudo_hash) {
+                            file_to_md5.insert(filename.clone(), md5.clone());
+                        } else {
+                            let md5 = format!(
+                                "{}.{}",
+                                HexDisplay(
+                                    Md5::new()
+                                        .chain_update(fs::read(icon_dir.join(filename))?)
+                                        .finalize()
+                                        .into()
+                                ),
+                                Path::new(filename)
+                                    .extension()
+                                    .expect("image files should always be created with extensions!")
+                                    .to_string_lossy()
+                            );
+
+                            cache_to_md5.insert(pseudo_hash.clone(), md5.clone());
+                            file_to_md5.insert(filename.clone(), md5.clone());
+                            if seen_md5.insert(md5.clone()) {   // Some icon game-files are duplicates differing only in metadata, so md5 "collisions" can happen for identical images; No need to re-write the image
+                                writer.start_file(&md5, FileOptions::<()>::default().compression_method(CompressionMethod::Stored))
+                                    .map_err(|e| format!("err in {} ({}): {}", filename, md5, e))
+                                    .map_err(io::Error::other)?;
+                                io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
+                            }
+
+                        }
+                    }
+
+                    for type_icons in service_metadata.values_mut() {
+                        for icon_file in type_icons.values_mut() {
+                            *icon_file = file_to_md5.get(icon_file).expect("each file must map to an md5-deduplicated file!").clone();
+                        }
+                    }
+
+                } else {
+                    // Copy the icons IEC-style; Types with the same icon get duplicated files
+                    for filename in new_index.keys() {
+                        // Use stored compression, as image files are already compressed themselves.
+                        writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                        io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
+                    }
                 }
+
+                writer.start_file("service_metadata.json", FileOptions::<()>::default()).map_err(io::Error::other)?;
+
+                serde_json::to_writer_pretty(&mut writer, &service_metadata).map_err(io::Error::other)?;
+
                 writer.finish().map_err(io::Error::other)?;
             }
         }
