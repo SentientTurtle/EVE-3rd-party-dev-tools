@@ -13,4 +13,6 @@ evesharedcache = { path = "../evesharedcache" }
 reqwest = { version = "0.12.12", features = ["blocking"] }
 zip = "2.2.2"
 yaml-rust2 = "0.10.0"
+image = "0.25.5"
+image-blend = "0.1.7"
 clap = "4.5.29"

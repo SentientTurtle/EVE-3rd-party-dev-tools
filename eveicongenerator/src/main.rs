@@ -6,7 +6,9 @@ use crate::sde::update_sde;
 use evesharedcache::cache::CacheDownloader;
 use std::time::Instant;
 use std::io;
-use clap::{Arg, Command};
+use std::path::PathBuf;
+use clap::{Arg, ArgAction, Command};
+use clap::builder::ValueParser;
 
 pub mod icons;
 pub mod sde;
@@ -25,13 +27,35 @@ fn main() -> Result<(), io::Error> {
                 .long("python2")
                 .required_if_eq("data", "FSD")
                 .help("command to python2, required for FSD use, ignored for SDE")
+                .value_parser(ValueParser::string()),
+            Arg::new("cache_folder")
+                .short('c')
+                .long("cache_folder")
+                .help("Game data cache folder to use")
+                .default_value("./cache")
+                .value_parser(ValueParser::path_buf()),
+            Arg::new("icon_folder")
+                .short('i')
+                .long("icon_folder")
+                .help("Output/Cache folder for icons")
+                .default_value("./icons")
+                .value_parser(ValueParser::path_buf()),
+            Arg::new("force_rebuild")
+                .short('f')
+                .long("force_rebuild")
+                .help("Force-rebuild of unchanged icons")
+                .action(ArgAction::SetTrue),
+            Arg::new("use_magick")
+                .long("use_magick")
+                .help("Use imagemagick 7 for image compositing")
+                .action(ArgAction::SetTrue)
         ])
         .get_matches();
 
     let start = Instant::now();
 
     println!("Initializing cache");
-    let cache = CacheDownloader::initialize("./cache", false).unwrap();
+    let cache = CacheDownloader::initialize(arg_matches.get_one::<PathBuf>("cache_folder").expect("cache_folder is a required argument"), false).unwrap();
     let cache_init_duration = start.elapsed();
 
     let data_load_start = Instant::now();
@@ -100,7 +124,14 @@ fn main() -> Result<(), io::Error> {
 
     println!("Building icons...");
     let build_start = Instant::now();
-    let (added, updated, removed) = icons::build_icon_export(&[OutputMode::Archive], &icon_build_data, &cache, "./icons").unwrap();
+    let (added, updated, removed) = icons::build_icon_export(
+        &[OutputMode::Archive],
+        &icon_build_data,
+        &cache,
+        arg_matches.get_one::<PathBuf>("icon_folder").expect("icon_folder is a required argument"),
+        arg_matches.get_flag("force_rebuild"),
+        arg_matches.get_flag("use_magick")
+    ).unwrap();
     let build_duration = build_start.elapsed();
 
     println!("Finished in: {:.1} seconds", start.elapsed().as_secs_f64());

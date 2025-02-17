@@ -2,11 +2,14 @@ use evesharedcache::cache::{CacheError, SharedCache};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitStatusError};
 use std::{fs, io};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use image::imageops::FilterType;
+use image::{imageops, ImageReader};
+use image_blend::BufferBlend;
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -51,6 +54,7 @@ pub fn techicon_resource_for_metagroup(metagroup_id: u32) -> Option<&'static str
 pub enum IconError {
     Cache(CacheError),
     IO(io::Error),
+    Image(image::ImageError),
     Magick(ExitStatusError),
     String(String)
 }
@@ -60,6 +64,7 @@ impl Display for IconError {
         match self {
             IconError::Cache(err) => Display::fmt(err, f),
             IconError::IO(err) => Display::fmt(err, f),
+            IconError::Image(err) => Display::fmt(err, f),
             IconError::Magick(err) => write!(f, "error in call to image magick {}", err),
             IconError::String(msg) => Display::fmt(msg, f)
         }
@@ -71,6 +76,7 @@ impl Error for IconError {
         match self {
             IconError::Cache(err) => Some(err),
             IconError::IO(err) => Some(err),
+            IconError::Image(err) => Some(err),
             IconError::Magick(err) => Some(err),
             IconError::String(_) => None
         }
@@ -86,6 +92,12 @@ impl From<CacheError> for IconError {
 impl From<io::Error> for IconError {
     fn from(value: io::Error) -> Self {
         IconError::IO(value)
+    }
+}
+
+impl From<image::ImageError> for IconError {
+    fn from(value: image::ImageError) -> Self {
+        IconError::Image(value)
     }
 }
 
@@ -113,7 +125,63 @@ pub enum OutputMode {
     Archive
 }
 
-pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode], data: &IconBuildData, cache: &C, icon_dir: P) -> Result<(usize, usize, usize), IconError> {
+fn composite_tech(icon: &Path, tech_icon: &Path, out: &Path, use_magick: bool) -> Result<(), IconError> {
+    if use_magick {
+        Command::new("magick")
+            .arg(icon)
+            .arg("-resize").arg("64x64")
+            .arg("(").arg(tech_icon).arg("-resize").arg("16x16!").arg(")")   // The tech-tier indicator must be sized; Structure tech tier isn't 16x16 but is squashed as such ingame
+            .arg("-composite")
+            .arg(out)
+            .status()?
+            .exit_ok()?;
+    } else {
+        let mut image = ImageReader::open(icon)?.with_guessed_format()?.decode()?.resize_exact(64, 64, FilterType::Lanczos3);  // TODO: Consider scaling up the overlay rather than scaling down the image
+
+        let tech_overlay = ImageReader::open(tech_icon)?.with_guessed_format()?.decode()?.resize_exact(16, 16, FilterType::Lanczos3);
+        imageops::overlay(&mut image, &tech_overlay, 0, 0);
+
+        image.save(out)?;
+    }
+    Ok(())
+}
+
+fn composite_blueprint(background: &Path, overlay: &Path, icon: &Path, tech_icon: Option<&Path>, out: &Path, use_magick: bool) -> Result<(), IconError> {
+    if use_magick {
+        let mut command = Command::new("magick");
+        command.arg(background)
+            .arg(icon)
+            .arg("-resize").arg("64x64")
+            .arg("-composite")
+            .arg("-compose").arg("plus")
+            .arg(overlay);
+
+        if let Some(icon_path) = tech_icon {
+            command.arg("-composite")
+                .arg("-compose").arg("over")
+                .arg("(").arg(icon_path).arg("-resize").arg("16x16!").arg(")");
+        }
+        command.arg("-composite").arg(out);
+        command.status()?.exit_ok()?;
+    } else {
+        let mut background_image = ImageReader::open(background)?.with_guessed_format()?.decode()?.into_rgba8();
+        let icon_image = ImageReader::open(icon)?.with_guessed_format()?.decode()?.resize_exact(64, 64, FilterType::Lanczos3);
+        imageops::overlay(&mut background_image, &icon_image, 0, 0);
+        let overlay_image = ImageReader::open(overlay)?.with_guessed_format()?.decode()?.into_rgba8();
+
+        background_image.blend(&overlay_image, image_blend::pixelops::pixel_add, true, false).map_err(io::Error::other)?;
+
+        if let Some(tech_overlay) = tech_icon {
+            let tech_overlay = ImageReader::open(tech_overlay)?.with_guessed_format()?.decode()?.resize_exact(16, 16, FilterType::Lanczos3);
+            imageops::overlay(&mut background_image, &tech_overlay, 0, 0);
+        }
+
+        background_image.save(out)?;
+    }
+    Ok(())
+}
+
+pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode], data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool) -> Result<(usize, usize, usize), IconError> {
     let icon_dir = icon_dir.as_ref();
     fs::create_dir_all(icon_dir)?;
 
@@ -135,12 +203,12 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
     let mut new_index = HashMap::<String, String>::new();
     let mut updated_images = HashSet::<String>::new();
 
-    fn is_up_to_date(old_index: &HashMap<String, String>, new_index: &mut HashMap<String, String>, updated: &mut HashSet<String>, filename: &str, key: &[&str]) -> bool {
+    fn is_up_to_date(old_index: &HashMap<String, String>, new_index: &mut HashMap<String, String>, updated: &mut HashSet<String>, filename: &str, key: &[&str], force_rebuild: bool) -> bool {
         let hash = key.join(";");
         let is_in_index = old_index.get(filename) == Some(&hash);
         new_index.insert(filename.to_string(), hash);
         if !is_in_index { updated.insert(filename.to_string()); }
-        is_in_index
+        is_in_index && !force_rebuild
     }
 
     for (type_id, type_info) in &data.types {
@@ -159,124 +227,84 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
                 if cache.has_resource(&*icon_resource_bp) && !USE_ICON_INSTEAD_OF_GRAPHIC_GROUPS.contains(&type_info.group_id) {
                     if let Some(techicon) = techicon_resource_for_metagroup(type_info.meta_group_id.unwrap_or(1)) {
                         let filename = format!("{}_64.png", type_id);
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bp, techicon]) {
-                            Command::new("magick")
-                                .arg(cache.path_of(&*icon_resource_bp)?)
-                                .arg("-resize").arg("64x64")
-                                .arg("(").arg(cache.path_of(techicon)?).arg("-resize").arg("16x16!").arg(")")   // The tech-tier indicator must be sized; Structure tech tier isn't 16x16 but is squashed as such ingame
-                                .arg("-composite")
-                                .arg(icon_dir.join(filename))
-                                .status()?
-                                .exit_ok()?;
+                        // NOTE: single-pipe OR required here as is_up_to_date has essential side effects
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bp, techicon], force_rebuild) {
+                            composite_tech(&cache.path_of(&*icon_resource_bp)?, &cache.path_of(techicon)?, &icon_dir.join(filename), use_magick)?;
                         }
 
                         if cache.has_resource(&*icon_resource_bpc) {
                             let filename = format!("{}_64_bpc.png", type_id);
-                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bpc, techicon]) {
-                                Command::new("magick")
-                                    .arg(cache.path_of(&*icon_resource_bpc)?)
-                                    .arg("-resize").arg("64x64")
-                                    .arg("(").arg(cache.path_of(techicon)?).arg("-resize").arg("16x16!").arg(")")
-                                    .arg("-composite")
-                                    .arg(icon_dir.join(filename))
-                                    .status()?
-                                    .exit_ok()?;
+                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bpc, techicon], force_rebuild) {
+                                composite_tech(&cache.path_of(&*icon_resource_bpc)?, &cache.path_of(techicon)?, &icon_dir.join(filename), use_magick)?;
                             }
                         }
                     } else {
                         let filename = format!("{}_64.png", type_id);
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bp]) {
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bp], force_rebuild) {
                             fs::copy(cache.path_of(&*icon_resource_bp)?, icon_dir.join(filename))?;
                         }
 
                         if cache.has_resource(&*icon_resource_bpc) {
                             let filename = format!("{}_64_bpc.png", type_id);
-                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bpc]) {
+                            if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource_bpc], force_rebuild) {
                                 fs::copy(cache.path_of(&*icon_resource_bpc)?, icon_dir.join(format!("{}_64_bpc.png", type_id)))?;
                             }
                         }
                     }
                 }
             } else if let Some(icon) = type_info.icon_id { // If no graphics icon, try icon
-                fn build_command<C: SharedCache>(cache: &C, out_path: PathBuf, background_resource: &str, overlay_resource: &str, icon_resource: &str, tech_overlay: Option<&str>) -> Result<Command, IconError> {
-                    let mut command = Command::new("magick");
-                    command.arg(cache.path_of(background_resource)?)
-                        .arg(cache.path_of(icon_resource)?)
-                        .arg("-resize").arg("64x64")
-                        .arg("-composite")
-                        .arg("-compose").arg("plus")
-                        .arg(cache.path_of(overlay_resource)?);
-
-                    if let Some(techicon) = tech_overlay {
-                        command.arg("-composite")
-                            .arg("-compose").arg("over")
-                            .arg("(").arg(cache.path_of(techicon)?).arg("-resize").arg("16x16!").arg(")");
-                    }
-
-                    command.arg("-composite").arg(out_path);
-                    Ok(command)
-                }
-
                 let icon_resource = &*data.icon_files.get(&icon).ok_or(IconError::String(format!("unknown icon id: {}", icon)))?;
                 if cache.has_resource(&icon_resource) {
                     let tech_overlay = techicon_resource_for_metagroup(type_info.meta_group_id.unwrap_or(1));
                     let filename = format!("{}_64.png", type_id);
 
                     if category_id == 34 {
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "relic", tech_overlay.unwrap_or("")]) {
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "relic", tech_overlay.unwrap_or("")], force_rebuild) {
                             // Relic BG/overlay
-                            build_command(
-                                cache,
-                                icon_dir.join(filename),
-                                "res:/ui/texture/icons/relic.png",
-                                "res:/ui/texture/icons/relic_overlay.png",
-                                icon_resource,
-                                tech_overlay
-                            )?
-                                .status()?
-                                .exit_ok()?;
+                            composite_blueprint(
+                                &cache.path_of("res:/ui/texture/icons/relic.png")?,
+                                &cache.path_of("res:/ui/texture/icons/relic_overlay.png")?,
+                                &cache.path_of(icon_resource)?,
+                                tech_overlay.map(|res| cache.path_of(res)).transpose()?.as_deref(),
+                                &icon_dir.join(filename),
+                                use_magick
+                            )?;
                         }
                     } else if REACTION_GROUPS.contains(&type_info.group_id) {
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "reaction", tech_overlay.unwrap_or("")]) {
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "reaction", tech_overlay.unwrap_or("")], force_rebuild) {
                             // Reaction BG/overlay
-                            build_command(
-                                cache,
-                                icon_dir.join(filename),
-                                "res:/ui/texture/icons/reaction.png",
-                                "res:/ui/texture/icons/bpo_overlay.png", // TODO: Verify against ingame icons
-                                icon_resource,
-                                tech_overlay
-                            )?
-                                .status()?
-                                .exit_ok()?;
+                            composite_blueprint(
+                                &cache.path_of("res:/ui/texture/icons/reaction.png")?,
+                                &cache.path_of("res:/ui/texture/icons/bpo_overlay.png")?,
+                                &cache.path_of(icon_resource)?,
+                                tech_overlay.map(|res| cache.path_of(res)).transpose()?.as_deref(),
+                                &icon_dir.join(filename),
+                                use_magick
+                            )?;
                         }
                     } else {
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "bpo", tech_overlay.unwrap_or("")]) {
-                            // BP & BPC BG/overlay
-                            build_command(
-                                cache,
-                                icon_dir.join(filename),
-                                "res:/ui/texture/icons/bpo.png",
-                                "res:/ui/texture/icons/bpo_overlay.png",
-                                icon_resource,
-                                tech_overlay
-                            )?
-                                .status()?
-                                .exit_ok()?;
+                        // BP & BPC BG/overlay
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "bpo", tech_overlay.unwrap_or("")], force_rebuild) {
+                            composite_blueprint(
+                                &cache.path_of("res:/ui/texture/icons/bpo.png")?,
+                                &cache.path_of("res:/ui/texture/icons/bpo_overlay.png")?,
+                                &cache.path_of(icon_resource)?,
+                                tech_overlay.map(|res| cache.path_of(res)).transpose()?.as_deref(),
+                                &icon_dir.join(filename),
+                                use_magick
+                            )?;
                         }
 
                         let filename = format!("{}_64_bpc.png", type_id);
-                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "bpc", tech_overlay.unwrap_or("")]) {
-                            build_command(
-                                cache,
-                                icon_dir.join(filename),
-                                "res:/ui/texture/icons/bpc.png",
-                                "res:/ui/texture/icons/bpc_overlay.png",
-                                icon_resource,
-                                tech_overlay
-                            )?
-                                .status()?
-                                .exit_ok()?;
+                        if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, "bpc", tech_overlay.unwrap_or("")], force_rebuild) {
+                            composite_blueprint(
+                                &cache.path_of("res:/ui/texture/icons/bpc.png")?,
+                                &cache.path_of("res:/ui/texture/icons/bpc_overlay.png")?,
+                                &cache.path_of(icon_resource)?,
+                                tech_overlay.map(|res| cache.path_of(res)).transpose()?.as_deref(),
+                                &icon_dir.join(filename),
+                                use_magick
+                            )?;
                         }
                     }
                 } else {
@@ -305,7 +333,8 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
 
                 let filename = format!("{}_512.jpg", type_id);
                 let render_resource = format!("{}/{}_512.jpg", folder.trim_end_matches('/'), type_info.graphic_id.unwrap());
-                if cache.has_resource(&*render_resource) && !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*render_resource]) {
+                // Intentional short-circuit; If no resource we skip the type as having no icon, and do not update indices
+                if cache.has_resource(&*render_resource) && !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*render_resource], force_rebuild) {
                     fs::copy(cache.path_of(&*render_resource)?, icon_dir.join(filename))?;
                 }
             } else if let Some(icon) = type_info.icon_id {
@@ -324,18 +353,11 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
             if cache.has_resource(&icon_resource) {
                 let filename = format!("{}_64.png", type_id);
                 if let Some(techicon) = techicon_resource_for_metagroup(type_info.meta_group_id.unwrap_or(1)) {
-                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, techicon]) {
-                        Command::new("magick")
-                            .arg(cache.path_of(&*icon_resource)?)
-                            .arg("-resize").arg("64x64")
-                            .arg("(").arg(cache.path_of(techicon)?).arg("-resize").arg("16x16!").arg(")")
-                            .arg("-composite")
-                            .arg(icon_dir.join(filename))
-                            .status()?
-                            .exit_ok()?;
+                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource, techicon], force_rebuild) {
+                        composite_tech(&cache.path_of(&icon_resource)?, &cache.path_of(techicon)?, &icon_dir.join(filename), use_magick)?
                     }
                 } else {
-                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource]) {
+                    if !is_up_to_date(&old_index, &mut new_index, &mut updated_images, &filename, &[&*icon_resource], force_rebuild) {
                         fs::copy(cache.path_of(&*icon_resource)?, icon_dir.join(filename))?;
                     }
                 }
@@ -363,6 +385,8 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(outputs: &[OutputMode],
     }
 
     let to_add = new_index.keys().filter(|key| !old_index.contains_key(*key)).map(String::as_str).collect::<Vec<&str>>();
+
+    println!("Icons built, generating outputs...");
 
     for output in outputs {
         match output {
