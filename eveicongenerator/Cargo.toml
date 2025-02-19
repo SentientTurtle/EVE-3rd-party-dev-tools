@@ -16,6 +16,11 @@ yaml-rust2 = "0.10.0"
 image = "0.25.5"
 image-blend = "0.1.7"
 clap = "4.5.29"
-md-5 = "0.10.6"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.135"
+
+# These are required for cross-compilation (windows -> linux), and may be omitted when compiling natively on linux
+[target.'cfg(target_os = "linux")'.dependencies]
+openssl = { version = '*', features = ["vendored"] }
+[target.'cfg(target_os = "linux")'.build-dependencies]
+openssl = { version = '*', features = ["vendored"] }

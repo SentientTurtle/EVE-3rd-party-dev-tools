@@ -1,47 +1,31 @@
 #![feature(exit_status_error)]
 #![feature(iter_intersperse)]
 #![feature(path_add_extension)]
+#![feature(iter_collect_into)]
 
-use crate::icons::{IconBuildData, OutputMode};
+use crate::icons::{IconBuildData, IconError, OutputMode};
 use crate::sde::update_sde;
 use evesharedcache::cache::CacheDownloader;
 use std::time::Instant;
-use std::io;
+use std::{fs, io};
 use std::path::PathBuf;
 use clap::{Arg, ArgAction, Command};
 use clap::builder::ValueParser;
 
-pub mod util {
-    use std::fmt::{Display, Formatter};
-
-    pub struct HexDisplay<const N: usize>(pub [u8; N]);
-    impl<const N: usize> Display for HexDisplay<N> {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            for byte in self.0 {
-                write!(f, "{:x}", byte)?;
-            }
-            Ok(())
-        }
-    }
-}
 pub mod icons;
 pub mod sde;
 
-fn main() -> Result<(), io::Error> {
+fn main() {
+    match do_main() {
+        Ok(()) => {}
+        Err(err) => println!("Error: {}", err)
+    }
+}
+
+fn do_main() -> Result<(), IconError> {
     let arg_matches = Command::new("eveicongenerator")
         .about("Multi-purpose item-icon generator for EVE Online")
         .args([
-            Arg::new("data")
-                .short('d')
-                .long("data")
-                .value_parser(["SDE", #[cfg(feature="enable_fsd")] "FSD"])
-                .default_value("SDE")
-                .help("Data source to use"),
-            Arg::new("python2")
-                .long("python2")
-                .required_if_eq("data", "FSD")
-                .help("command to python2, required for FSD use, ignored for SDE")
-                .value_parser(ValueParser::string()),
             Arg::new("cache_folder")
                 .short('c')
                 .long("cache_folder")
@@ -54,21 +38,96 @@ fn main() -> Result<(), io::Error> {
                 .help("Output/Cache folder for icons")
                 .default_value("./icons")
                 .value_parser(ValueParser::path_buf()),
+            Arg::new("data")
+                .short('d')
+                .long("data")
+                .value_parser(["SDE", #[cfg(feature="enable_fsd")] "FSD"])
+                .requires_if("FSD", "python2")
+                .default_value("SDE")
+                .help("Data source to use"),
+            Arg::new("python2")
+                .long("python2")
+                .required_if_eq("data", "FSD")
+                .help("command to python 2.7, required for FSD use")
+                .value_parser(ValueParser::string()),
             Arg::new("force_rebuild")
                 .short('f')
                 .long("force_rebuild")
                 .help("Force-rebuild of unchanged icons")
                 .action(ArgAction::SetTrue),
+            Arg::new("skip_if_fresh")
+                .short('s')
+                .long("skip_if_fresh")
+                .help("If icons are unchanged, skip output")
+                .action(ArgAction::SetTrue),
             Arg::new("use_magick")
                 .long("use_magick")
                 .help("Use imagemagick 7 for image compositing")
-                .action(ArgAction::SetTrue),
-            Arg::new("deduplicate")
-                .long("deduplicate")
-                .help("Deduplicate output")
                 .action(ArgAction::SetTrue)
         ])
+        .subcommand_required(true)
+        .subcommands([
+            Command::new("service_bundle")
+                .about("Image Service hosting bundle (zip incl. metadata)")
+                .arg(
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .required(true)
+                        .help("Output file")
+                        .value_parser(ValueParser::path_buf())
+                ),
+            Command::new("iec")
+                .about("Image Export Collection (zip)")
+                .arg(
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .required(true)
+                        .help("Output file")
+                        .value_parser(ValueParser::path_buf())
+                ),
+            Command::new("web_dir")
+                .about("Prepare a directory for web hosting")
+                .args([
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .required(true)
+                        .help("Output directory")
+                        .value_parser(ValueParser::path_buf()),
+                    Arg::new("copy_files")
+                        .long("copy_files")
+                        .help("Copy image files rather than creating symlinks")
+                        .action(ArgAction::SetTrue),
+                    Arg::new("hardlink")
+                        .long("hardlink")
+                        .help("Use hard-links rather than soft-links")
+                        .action(ArgAction::SetTrue)
+                ])
+        ])
         .get_matches();
+
+    let (command_name, command_args) = arg_matches.subcommand().expect("subcommand required");
+    let output_mode = match command_name {
+        "service_bundle" => OutputMode::ServiceBundle { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
+        "iec" => OutputMode::IEC { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
+        "web_dir" => {
+            let out = &command_args.get_one::<PathBuf>("out").expect("out is required");
+            if !fs::exists(out)? {
+                fs::create_dir_all(out)?;
+            } else if fs::metadata(out)?.is_file() {
+                Err(io::Error::other(format!("Output must be a directory! ({})", out.to_string_lossy())))?;
+            }
+            OutputMode::Web {
+                out,
+                copy_files: command_args.get_flag("copy_files"),
+                hard_link: command_args.get_flag("hardlink")
+            }
+        },
+        _ => panic!("Unknown subcommand: {}", command_name)
+    };
+
 
     let start = Instant::now();
 
@@ -142,20 +201,22 @@ fn main() -> Result<(), io::Error> {
 
     println!("Building icons...");
     let build_start = Instant::now();
-    let (added, updated, removed) = icons::build_icon_export(
-        &[OutputMode::Archive { deduplicate: arg_matches.get_flag("deduplicate") }],
+    let (added, removed) = icons::build_icon_export(
+        output_mode,
+        arg_matches.get_flag("skip_if_fresh"),
         &icon_build_data,
         &cache,
         arg_matches.get_one::<PathBuf>("icon_folder").expect("icon_folder is a required argument"),
         arg_matches.get_flag("force_rebuild"),
         arg_matches.get_flag("use_magick")
-    ).unwrap();
+    )?;
+
     let build_duration = build_start.elapsed();
 
     println!("Finished in: {:.1} seconds", start.elapsed().as_secs_f64());
     println!("\tCache init: {:.1} seconds", cache_init_duration.as_secs_f64());
     println!("\tData load: {:.1} seconds ({})", data_load_duration.as_secs_f64(), data_source);
-    println!("\tImage Build: {:.1} seconds ({} added, {} updated, {} removed)", build_duration.as_secs_f64(), added, updated, removed);
+    println!("\tImage Build: {:.1} seconds ({} added, {} removed)", build_duration.as_secs_f64(), added, removed);
 
     // Delete unnecessary cache files to avoid a storage "leak"
     cache.purge(&["fsd.zip", "checksum.txt"])?;
