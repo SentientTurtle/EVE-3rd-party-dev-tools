@@ -188,11 +188,11 @@ impl SharedCache for CacheReader {
     }
 
     fn has_resource(&self, resource: &str) -> bool {
-        self.index.contains_key(&resource.to_ascii_lowercase())
+        self.index.contains_key(&resource.to_ascii_lowercase().replace('\\', "/"))
     }
 
     fn fetch(&self, resource: &str) -> Result<Vec<u8>, CacheError> {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         let path = if let Some(IndexEntry { path, .. }) = self.index.get(&resource) {
             self.res_dir.join(path)
         } else {
@@ -207,7 +207,7 @@ impl SharedCache for CacheReader {
     }
 
     fn path_of(&self, resource: &str) -> Result<PathBuf, CacheError> {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         let path = if let Some(IndexEntry { path, .. }) = self.index.get(&resource) {
             self.res_dir.join(path)
         } else {
@@ -222,7 +222,7 @@ impl SharedCache for CacheReader {
     }
 
     fn hash_of(&self, resource: &str) -> Result<&str, CacheError> {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         let IndexEntry { md5, .. } = self.index.get(&resource)
             .ok_or_else(|| CacheError::ResourceNotFound(resource))?;
         Ok(md5)
@@ -389,12 +389,12 @@ impl SharedCache for CacheDownloader {
     }
 
     fn has_resource(&self, resource: &str) -> bool {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         self.app_index.contains_key(&resource) || self.res_index.contains_key(&resource)
     }
 
     fn fetch(&self, resource: &str) -> Result<Vec<u8>, CacheError> {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         if let Some(IndexEntry { path, .. }) = self.app_index.get(&resource) {
             self.fetch_file(self.cache_dir.join(path), format!("https://binaries.eveonline.com/{}", path))
         } else if let Some(IndexEntry { path, ..}) = self.res_index.get(&resource) {
@@ -405,7 +405,7 @@ impl SharedCache for CacheDownloader {
     }
 
     fn path_of(&self, resource: &str) -> Result<PathBuf, CacheError> {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         if let Some(IndexEntry { path, .. }) = self.app_index.get(&resource) {
             let path_buf = self.cache_dir.join(path);
             self.ensure_cached(path_buf.as_path(), format!("https://binaries.eveonline.com/{}", path))
@@ -420,7 +420,7 @@ impl SharedCache for CacheDownloader {
     }
 
     fn hash_of(&self, resource: &str) -> Result<&str, CacheError> {
-        let resource = resource.to_ascii_lowercase();
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
         let IndexEntry { md5, .. } = self.app_index.get(&resource)
             .or_else(|| self.res_index.get(&resource))
             .ok_or_else(|| CacheError::ResourceNotFound(resource.to_string()))?;

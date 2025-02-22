@@ -22,7 +22,7 @@ pub fn download_fsd<W: Write>(dest: &mut W) -> Result<(), io::Error> {
 }
 
 #[allow(unused_parens)] // Occasionally over-eager, so disabled for now
-pub fn update_sde() -> Result<ZipArchive<File>, io::Error> {
+pub fn update_sde(silent_mode: bool) -> Result<ZipArchive<File>, io::Error> {
     let mut download = true;
     let new_version = get_fsd_checksum()?;
     if fs::exists("./cache/fsd.zip")? && fs::exists("./cache/checksum.txt")? {
@@ -30,19 +30,19 @@ pub fn update_sde() -> Result<ZipArchive<File>, io::Error> {
         download = (current_version != new_version);
     }
     if download {
-        println!("Downloading new SDE...");
+        if !silent_mode { println!("Downloading new SDE..."); }
         fs::create_dir_all("./cache")?;
         fs::write("./cache/checksum.txt", new_version)?;  // Store checksum in another file; The checksum is over the (unzipped) contents of the archive, not the archive itself, and so is hard/slow to calculate
         download_fsd(&mut File::create("./cache/fsd.zip")?)?;
     }
-    println!("SDE up to date!");
+    if !silent_mode { println!("SDE up to date!"); }
 
     Ok(ZipArchive::new(File::open("./cache/fsd.zip")?)?)
 }
 
-pub fn read_types(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, TypeInfo>, io::Error> {
+pub fn read_types(sde: &mut ZipArchive<File>, silent_mode: bool) -> Result<HashMap<u32, TypeInfo>, io::Error> {
     // Parsing the SDEs YAML properly is rather slow and fragile as the SDE is not entirely spec-compliant, so we just directly extract the fields we need.
-    println!("\tLoading types...");
+    if !silent_mode { println!("\tLoading types..."); }
     let mut types = HashMap::<u32, TypeInfo>::new();
     {
         let mut current_type: Option<&mut TypeInfo> = None;
@@ -71,8 +71,8 @@ pub fn read_types(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, TypeInfo>, 
     Ok(types)
 }
 
-pub fn read_group_categories(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, u32>, io::Error> {
-    println!("\tLoading groups...");
+pub fn read_group_categories(sde: &mut ZipArchive<File>, silent_mode: bool) -> Result<HashMap<u32, u32>, io::Error> {
+    if !silent_mode { println!("\tLoading groups..."); }
     let mut group_categories = HashMap::<u32, u32>::new();
     {
         let mut current_group = 0u32;
@@ -91,8 +91,8 @@ pub fn read_group_categories(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, 
     Ok(group_categories)
 }
 
-pub fn read_icons(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, String>, io::Error> {
-    println!("\tLoading icon info...");
+pub fn read_icons(sde: &mut ZipArchive<File>, silent_mode: bool) -> Result<HashMap<u32, String>, io::Error> {
+    if !silent_mode { println!("\tLoading icon info..."); }
     let mut icon_files = HashMap::<u32, String>::new();
     {
         let mut file = sde.by_name("iconIDs.yaml")?;
@@ -114,8 +114,8 @@ pub fn read_icons(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, String>, io
     Ok(icon_files)
 }
 
-pub fn read_graphics(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, String>, io::Error> {
-    println!("\tLoading graphic info...");
+pub fn read_graphics(sde: &mut ZipArchive<File>, silent_mode: bool) -> Result<HashMap<u32, String>, io::Error> {
+    if !silent_mode { println!("\tLoading graphic info..."); }
     let mut graphic_folders = HashMap::<u32, String>::new();
     {
         let mut current_graphic = 0u32;
@@ -134,8 +134,8 @@ pub fn read_graphics(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, String>,
     Ok(graphic_folders)
 }
 
-pub fn read_skin_materials(sde: &mut ZipArchive<File>) -> Result<HashMap<u32, u32>, io::Error> {
-    println!("\tLoading skin info...");
+pub fn read_skin_materials(sde: &mut ZipArchive<File>, silent_mode: bool) -> Result<HashMap<u32, u32>, io::Error> {
+    if !silent_mode { println!("\tLoading skin info..."); }
     let mut license_skins = HashMap::<u32, u32>::new();
     {
         let mut current_license = 0u32;

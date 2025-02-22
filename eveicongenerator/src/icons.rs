@@ -5,8 +5,9 @@ use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::process::{Command, ExitStatusError};
 use std::{fs, io};
+use std::io::Write;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, ErrorKind};
 use image::imageops::FilterType;
 use image::{imageops, ImageFormat, ImageReader};
 use image_blend::BufferBlend;
@@ -222,13 +223,17 @@ impl IconKind {
     }
 }
 
+#[derive(Debug)]
 pub enum OutputMode<'a> {
     ServiceBundle { out: &'a Path },
     IEC { out: &'a Path },
     Web { out: &'a Path, copy_files: bool, hard_link: bool },
+    Checksum { out: Option<&'a Path> }
 }
 
-pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool) -> Result<(usize, usize), IconError> {
+pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool, silent_mode: bool) -> Result<(usize, usize), IconError> {
+    let log_file = crate::LOG_FILE.get();
+
     let icon_dir = icon_dir.as_ref();
     fs::create_dir_all(icon_dir)?;
 
@@ -368,7 +373,8 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                     }
                 } else {
                     // Skip missing icons, sometimes they're broken in-game.
-                    println!("\tERR: Missing icon for: {}", type_id);
+                    if !silent_mode { println!("\tERR: Missing icon for: {}", type_id); }
+                    if let Some(mut log) = log_file { writeln!(log, "\tERR: Missing icon for: {}", type_id)?; }
                 }
             } else {
                 continue; // No icon to be generated here
@@ -380,6 +386,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
             let mut icon_resource;
             if let Some(folder) = graphic_iconinfo {
                 icon_resource = format!("{}/{}_64.png", folder.trim_end_matches('/'), type_info.graphic_id.unwrap());
+                
                 // If no graphic, try icon
                 if !cache.has_resource(&*icon_resource) || USE_ICON_INSTEAD_OF_GRAPHIC_GROUPS.contains(&type_info.group_id) {
                     if let Some(icon) = type_info.icon_id {
@@ -427,35 +434,43 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                     }
                 }
             } else {
-                println!("\tERR: Missing icon for: {}", type_id);
+                if !silent_mode { println!("\tERR: Missing icon for: {}", type_id); }
+                if let Some(mut log) = log_file { writeln!(log, "\tERR: Missing icon for: {}", type_id)?; }
                 continue; // Skip missing icons, sometimes they're broken in-game.
             }
         }
     }
 
-    let index_bytes = new_index.iter()
-        .map(String::as_str)
+    let mut sort_index = Vec::with_capacity(new_index.len());
+    new_index.iter().map(String::as_str).collect_into(&mut sort_index);
+    sort_index.sort();
+
+    let index_bytes = sort_index.into_iter()
         .intersperse("\x1E")
         .flat_map(|str| str.as_bytes())
         .copied()
         .collect::<Vec<u8>>();
 
-    fs::write(index_path, index_bytes)?;
+    fs::write(index_path, &index_bytes)?;
 
     let to_remove = old_index.iter().filter(|key| !new_index.contains(*key)).map(String::as_str).collect::<Vec<&str>>();
     let to_add = new_index.iter().filter(|key| !old_index.contains(*key)).map(String::as_str).collect::<Vec<&str>>();
 
     if to_add.len() == 0 && to_remove.len() == 0 && skip_output_if_fresh {
-        println!("Icons fresh, skipping outputs...");
+        if !silent_mode { println!("Icons fresh, skipping outputs..."); }
+        if let Some(mut log) = log_file { writeln!(log, "Icons fresh, skipping outputs...")?; }
     } else {
-        println!("Icons built, generating outputs...");
+        if !silent_mode { println!("Icons built, generating outputs..."); }
+        if let Some(mut log) = log_file { writeln!(log, "Icons built, generating outputs...")?; }
         match output_mode {
             OutputMode::ServiceBundle { out} => {
+                if let Some(mut log) = log_file { writeln!(log, "Writing Service Bundle to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
                 for filename in &new_index {
                     writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored))
                         .map_err(|e| format!("err in {}: {}", filename, e))
                         .map_err(io::Error::other)?;
+                    if let Some(mut log) = log_file { writeln!(log, "\t{}", filename)?; }
                     io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                 }
 
@@ -465,22 +480,29 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 writer.finish().map_err(io::Error::other)?;
             }
             OutputMode::IEC { out } => {
+                if let Some(mut log) = log_file { writeln!(log, "Writing IEC archive to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
                 // Copy the icons IEC-style; Types with the same icon get duplicated files
                 for (type_id, icons) in &service_metadata {
                     for (icon_kind, filename) in icons {
                         match icon_kind {
                             IconKind::Icon => {
-                                writer.start_file(format!("{}_64.png", type_id), FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                                let output_name = format!("{}_64.png", type_id);
+                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                                if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                             IconKind::Blueprint | IconKind::Reaction | IconKind::Relic => { /* None, these are duplicated by IconKind::Icon */}
                             IconKind::BlueprintCopy => {
-                                writer.start_file(format!("{}_bpc_64.png", type_id), FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                                let output_name = format!("{}_bpc_64.png", type_id);
+                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                                if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                             IconKind::Render => {
-                                writer.start_file(format!("{}_512.jpg", type_id), FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                                let output_name = format!("{}_512.jpg", type_id);
+                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                                if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                         }
@@ -489,7 +511,9 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 writer.finish().map_err(io::Error::other)?;
             }
             OutputMode::Web { out, copy_files, hard_link } => {
-                let mut created_files = HashMap::new();
+                let mode_name = if copy_files { "COPYING" } else if hard_link { "HARD LINK" } else { "SOFT LINK" };
+                if let Some(mut log) = log_file { writeln!(log, "Building web folder to {:?} ({})", out, mode_name)?; }
+                let mut created_files = HashMap::<String, String>::new();
 
                 let index_path = out.join("index.json");
                 let old_links = if fs::exists(&index_path)? {
@@ -500,48 +524,60 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
 
                 let mut kind_buf = Vec::<IconKind>::new();
                 for (type_id, icons) in &service_metadata {
-                    let json_filename = format!("{}.json", type_id);
+                    let json_name = format!("{}.json", type_id);
+                    let json_filename = out.join(&json_name);
                     icons.keys().collect_into(&mut kind_buf);
                     let json_content = serde_json::to_string(&kind_buf).map_err(io::Error::other)?;
                     kind_buf.clear();
-                    if force_rebuild || old_links.get(&json_filename) != Some(&json_content) {
+                    if force_rebuild || old_links.get(&json_name) != Some(&json_content) {
                         fs::write(&json_filename, json_content.as_bytes())?;
                     }
-                    created_files.insert(json_filename, json_content);
+                    created_files.insert(json_name, json_content);
 
                     for (icon_kind, filename) in icons {
                         let link_name = format!("{}_{}.{}", type_id, icon_kind.name(), if IconKind::Render == *icon_kind { "jpg" } else { "png" });
-                        let link_in = std::path::absolute(icon_dir.join(filename))?;
-                        let link_out = std::path::absolute(out.join(&link_name))?;
-
+                        let link_source = std::path::absolute(icon_dir.join(filename))?;
+                        let link_file = std::path::absolute(out.join(&link_name))?;
 
                         if force_rebuild || old_links.get(&link_name) != Some(&filename) {
+                            if let Some(mut log) = log_file { writeln!(log, "\t{} -> {}", &filename, &link_name)?; }
                             if copy_files {
-                                fs::copy(link_in, link_out)?;
+                                fs::copy(link_source, link_file)?;
                             } else if hard_link {
-                                if fs::exists(&link_out)? { fs::remove_file(&link_out)? };
-                                fs::hard_link(link_in, link_out)?;
+                                if fs::exists(&link_file)? { fs::remove_file(&link_file)? };
+                                fs::hard_link(link_source, link_file)?;
                             } else {
-                                if fs::exists(&link_out)? { fs::remove_file(&link_out)? };
+                                if fs::exists(&link_file)? { fs::remove_file(&link_file)? };
                                 #[cfg(target_family = "windows")]
-                                std::os::windows::fs::symlink_file(link_in, link_out)?;
+                                std::os::windows::fs::symlink_file(link_source, link_file)?;
                                 #[cfg(target_family = "unix")]
-                                std::os::unix::fs::symlink(link_in, link_out)?;
+                                std::os::unix::fs::symlink(link_source, link_file)?;
                                 #[cfg(not(any(target_family = "windows", target_family = "unix")))]
                                 compile_error!("Can't create symlink on OS that is neither windows nor unix :(")
                             }
+                        } else {
+                            if let Some(mut log) = log_file { writeln!(log, "\tSKIP: {}", &link_name)?; }
                         }
                         created_files.insert(link_name, filename.clone());
                     }
+                }
 
-                    for entry in old_links.keys() {
-                        if !created_files.contains_key(entry) {
-                            fs::remove_file(entry)?;
-                        }
+                for entry in old_links.keys() {
+                    if !created_files.contains_key(entry) {
+                        if let Some(mut log) = log_file { writeln!(log, "\tRemoved: {}", &entry)?; }
+                        match fs::remove_file(out.join(entry)) {
+                            Ok(()) => Ok(()),
+                            Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+                            res => res
+                        }?;
                     }
                 }
                 serde_json::to_writer(File::create(&index_path)?, &created_files).map_err(io::Error::other)?;
             }
+            OutputMode::Checksum { out: Some(outfile) } => {
+                fs::write(outfile, format!("{:x}", md5::compute(&index_bytes)))?;
+            }
+            OutputMode::Checksum { out: None } => print!("{:x}", md5::compute(&index_bytes)),
         }
     }
 

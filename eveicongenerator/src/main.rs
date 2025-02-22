@@ -8,17 +8,28 @@ use crate::sde::update_sde;
 use evesharedcache::cache::CacheDownloader;
 use std::time::Instant;
 use std::{fs, io};
+use std::fs::File;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use clap::{Arg, ArgAction, Command};
 use clap::builder::ValueParser;
+use std::io::Write;
 
 pub mod icons;
 pub mod sde;
 
+static LOG_FILE: OnceLock<File> = OnceLock::new();
+
 fn main() {
     match do_main() {
         Ok(()) => {}
-        Err(err) => println!("Error: {}", err)
+        Err(err) => {
+            println!("Error: {}", err);
+            let log_file = LOG_FILE.get();
+            if let Some(mut log) = log_file {
+                writeln!(log, "Error: {}", err).unwrap();
+            }
+        }
     }
 }
 
@@ -38,6 +49,20 @@ fn do_main() -> Result<(), IconError> {
                 .help("Output/Cache folder for icons")
                 .default_value("./icons")
                 .value_parser(ValueParser::path_buf()),
+            Arg::new("logfile")
+                .short('l')
+                .long("logfile")
+                .help("Log file to use, no logging if unset")
+                .value_parser(ValueParser::path_buf()),
+            Arg::new("append_log")
+                .long("append_log")
+                .help("Append to log file, if unset replaces log file")
+                .requires("logfile")
+                .action(ArgAction::SetTrue),
+            Arg::new("silent")
+                .long("silent")
+                .help("Silent mode")
+                .action(ArgAction::SetTrue),
             Arg::new("data")
                 .short('d')
                 .long("data")
@@ -103,8 +128,18 @@ fn do_main() -> Result<(), IconError> {
                     Arg::new("hardlink")
                         .long("hardlink")
                         .help("Use hard-links rather than soft-links")
+                        .conflicts_with("copy_files")
                         .action(ArgAction::SetTrue)
-                ])
+                ]),
+            Command::new("checksum")
+                .about("Prints (or writes) the checksum of the current icon set")
+                .arg(
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .help("Output file, if omitted, prints checksum to stdout")
+                        .value_parser(ValueParser::path_buf())
+                ),
         ])
         .get_matches();
 
@@ -125,13 +160,30 @@ fn do_main() -> Result<(), IconError> {
                 hard_link: command_args.get_flag("hardlink")
             }
         },
+        "checksum" => OutputMode::Checksum { out: command_args.get_one::<PathBuf>("out").map(PathBuf::as_path) },
         _ => panic!("Unknown subcommand: {}", command_name)
     };
 
+    let silent_mode = arg_matches.get_flag("silent") || matches!(output_mode, OutputMode::Checksum { out: None });
+    let skip_if_fresh = arg_matches.get_flag("skip_if_fresh") && !matches!(output_mode, OutputMode::Checksum { out: None });
+
+    if let Some(log_path) = arg_matches.get_one::<PathBuf>("logfile") {
+        let mut opts = File::options();
+        if arg_matches.get_flag("append_log") {
+            opts.create(true).append(true);
+        } else {
+            opts.create(true).write(true).truncate(true);
+        }
+
+        LOG_FILE.set(opts.open(log_path)?).expect("Log file is set only once!");
+    }
+    let log_file = LOG_FILE.get();
+
+    if let Some(mut log) = log_file { writeln!(log, "Icon generation run, output: {:?} - {}", &output_mode, chrono::Local::now())?; }
 
     let start = Instant::now();
-
-    println!("Initializing cache");
+    if !silent_mode { println!("Initializing cache"); }
+    if let Some(mut log) = log_file { writeln!(log, "Initializing cache")?; }
     let cache = CacheDownloader::initialize(arg_matches.get_one::<PathBuf>("cache_folder").expect("cache_folder is a required argument"), false).unwrap();
     let cache_init_duration = start.elapsed();
 
@@ -139,15 +191,16 @@ fn do_main() -> Result<(), IconError> {
     let data_source = arg_matches.get_one::<String>("data").expect("Data arg must always be present as it has a default-value");
     let icon_build_data = match data_source.as_str() {
         "SDE" => {
-            println!("Loading SDE...");
-            let mut sde = update_sde()?;
+            if !silent_mode { println!("Loading SDE..."); }
+            if let Some(mut log) = log_file { writeln!(log, "Loading SDE...")?; }
+            let mut sde = update_sde(silent_mode)?;
 
             IconBuildData::new(
-                sde::read_types(&mut sde)?.into_iter().collect(),
-                sde::read_group_categories(&mut sde)?,
-                sde::read_icons(&mut sde)?,
-                sde::read_graphics(&mut sde)?,
-                sde::read_skin_materials(&mut sde)?
+                sde::read_types(&mut sde, silent_mode)?.into_iter().collect(),
+                sde::read_group_categories(&mut sde, silent_mode)?,
+                sde::read_icons(&mut sde, silent_mode)?,
+                sde::read_graphics(&mut sde, silent_mode)?,
+                sde::read_skin_materials(&mut sde, silent_mode)?
             )
         },
         #[cfg(feature="enable_fsd")]
@@ -156,7 +209,8 @@ fn do_main() -> Result<(), IconError> {
             use std::fs;
             use std::collections::HashMap;
 
-            println!("Loading python FSD...");
+            if !silent_mode { println!("Loading python FSD..."); }
+            if let Some(mut log) = log_file { writeln!(log, "Loading python FSD...")?; }
             let python2 = arg_matches.get_one::<String>("python2").expect("python2 must be present in FSD mode!");
             let temp_dir = "./fsd";
             fs::create_dir_all(temp_dir)?;
@@ -199,24 +253,40 @@ fn do_main() -> Result<(), IconError> {
 
     let data_load_duration = data_load_start.elapsed();
 
-    println!("Building icons...");
+    if !silent_mode { println!("Building icons..."); }
+    if let Some(mut log) = log_file { writeln!(log, "Building icons...")?; }
+
     let build_start = Instant::now();
     let (added, removed) = icons::build_icon_export(
         output_mode,
-        arg_matches.get_flag("skip_if_fresh"),
+        skip_if_fresh,
         &icon_build_data,
         &cache,
         arg_matches.get_one::<PathBuf>("icon_folder").expect("icon_folder is a required argument"),
         arg_matches.get_flag("force_rebuild"),
-        arg_matches.get_flag("use_magick")
+        arg_matches.get_flag("use_magick"),
+        silent_mode
     )?;
 
     let build_duration = build_start.elapsed();
 
-    println!("Finished in: {:.1} seconds", start.elapsed().as_secs_f64());
-    println!("\tCache init: {:.1} seconds", cache_init_duration.as_secs_f64());
-    println!("\tData load: {:.1} seconds ({})", data_load_duration.as_secs_f64(), data_source);
-    println!("\tImage Build: {:.1} seconds ({} added, {} removed)", build_duration.as_secs_f64(), added, removed);
+    let s1 = format!("Finished in: {:.1} seconds", start.elapsed().as_secs_f64());
+    let s2 = format!("\tCache init: {:.1} seconds", cache_init_duration.as_secs_f64());
+    let s3 = format!("\tData load: {:.1} seconds ({})", data_load_duration.as_secs_f64(), data_source);
+    let s4 = format!("\tImage Build: {:.1} seconds ({} added, {} removed)", build_duration.as_secs_f64(), added, removed);
+
+    if !silent_mode {
+        println!("{}", s1);
+        println!("{}", s2);
+        println!("{}", s3);
+        println!("{}", s4);
+    }
+    if let Some(mut log) = log_file {
+        writeln!(log, "{}", s1)?;
+        writeln!(log, "{}", s2)?;
+        writeln!(log, "{}", s3)?;
+        writeln!(log, "{}", s4)?;
+    }
 
     // Delete unnecessary cache files to avoid a storage "leak"
     cache.purge(&["fsd.zip", "checksum.txt"])?;
