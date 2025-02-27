@@ -1,7 +1,7 @@
 # EVE Icon Generator guide
 
 ### Global options
-* `--user_agent <user_agent>`, `-u <user_agent>` *REQUIRED*
+* `--user_agent <user_agent>`, `-u <user_agent>` *REQUIRED*  
   User agent for HTTP requests
 * `--cache_folder <directory>`, `-c <directory>` (default: `./cache`)  
   Folder for game file cache.  
