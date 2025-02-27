@@ -1,12 +1,13 @@
 # EVE Icon Generator guide
 
 ### Global options
-
-* `--cache-folder <directory>`, `-c <directory>` (default: `./cache`)  
+* `--user_agent <user_agent>`, `-u <user_agent>` *REQUIRED*
+  User agent for HTTP requests
+* `--cache_folder <directory>`, `-c <directory>` (default: `./cache`)  
   Folder for game file cache.  
   WARNING: All other files in this folder will be deleted during cleanup  
   This folder should persist between runs to avoid re-downloading files from CCP servers.
-* `--icon-folder <directory>`, `-i <directory>` (default: `./icons`)  
+* `--icon_folder <directory>`, `-i <directory>` (default: `./icons`)  
   Folder for storing built icons.
   This folder may be persisted to cache image-compositing work.
   NOTE: Other files in this folder will not be deleted. Only unnecessary files created by the previous run of this program will be cleaned up.

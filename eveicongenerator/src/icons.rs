@@ -18,7 +18,7 @@ use zip::{CompressionMethod, ZipWriter};
 // Industry "reaction" blueprints use a different background
 const REACTION_GROUPS: [u32; 4] = [1888, 1889, 1890, 4097];
 // Certain types have 3D models and associated graphicID, but use a 2D icon for their inventory icon
-const USE_ICON_INSTEAD_OF_GRAPHIC_GROUPS: [u32; 7] = [12, 340, 448, 548, 649, 711, 4168];
+const USE_ICON_INSTEAD_OF_GRAPHIC_GROUPS: [u32; 8] = [12, 340, 448, 479, 548, 649, 711, 4168];
 
 pub struct TypeInfo {
     pub group_id: u32,

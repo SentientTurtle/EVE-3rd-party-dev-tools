@@ -37,6 +37,12 @@ fn do_main() -> Result<(), IconError> {
     let arg_matches = Command::new("eveicongenerator")
         .about("Multi-purpose item-icon generator for EVE Online")
         .args([
+            Arg::new("user_agent")
+                .short('u')
+                .long("user_agent")
+                .help("User Agent for HTTP requests")
+                .required(true)
+                .value_parser(ValueParser::string()),
             Arg::new("cache_folder")
                 .short('c')
                 .long("cache_folder")
@@ -178,13 +184,18 @@ fn do_main() -> Result<(), IconError> {
         LOG_FILE.set(opts.open(log_path)?).expect("Log file is set only once!");
     }
     let log_file = LOG_FILE.get();
-
     if let Some(mut log) = log_file { writeln!(log, "Icon generation run, output: {:?} - {}", &output_mode, chrono::Local::now())?; }
 
+    let user_agent = arg_matches.get_one::<String>("user_agent").expect("user_agent is a required argument");
+
     let start = Instant::now();
-    if !silent_mode { println!("Initializing cache"); }
-    if let Some(mut log) = log_file { writeln!(log, "Initializing cache")?; }
-    let cache = CacheDownloader::initialize(arg_matches.get_one::<PathBuf>("cache_folder").expect("cache_folder is a required argument"), false).unwrap();
+    if !silent_mode { println!("Initializing cache (UA:`{}`)", user_agent); }
+    if let Some(mut log) = log_file { writeln!(log, "Initializing cache (UA:`{}`)", user_agent)?; }
+    let cache = CacheDownloader::initialize(
+        arg_matches.get_one::<PathBuf>("cache_folder").expect("cache_folder is a required argument"),
+        false,
+        user_agent
+    )?;
     let cache_init_duration = start.elapsed();
 
     let data_load_start = Instant::now();

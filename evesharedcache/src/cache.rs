@@ -245,12 +245,13 @@ impl CacheDownloader {
     ///
     /// * `directory`: Directory for local caching of downloaded files, created if not existing
     /// * `use_macos_build`: If true, download macOS build of the game, if false, download windows files
+    /// * `user_agent`: User Agent to use with HTTP requests
     ///
     /// returns: Result<CacheDownloader, CacheError>
-    pub fn initialize<T: Into<PathBuf>>(directory: T, use_macos_build: bool) -> Result<CacheDownloader, CacheError> {
+    pub fn initialize<T: Into<PathBuf>>(directory: T, use_macos_build: bool, user_agent: &str) -> Result<CacheDownloader, CacheError> {
         let cache_dir = directory.into();
         fs::create_dir_all(&cache_dir)?;
-        let http_client = reqwest::blocking::Client::builder().build()?;
+        let http_client = reqwest::blocking::Client::builder().user_agent(user_agent).build()?;
 
         if fs::exists(cache_dir.join("updater.exe"))? || fs::exists(cache_dir.join("tq"))? {
             return Err(CacheError::DownloadIntoGameInstall);
