@@ -1,5 +1,6 @@
 use std::{fs, io};
 use std::collections::{HashMap, HashSet};
+use std::collections::hash_map::Keys;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
@@ -101,7 +102,7 @@ impl IndexEntry {
                 .map_err(|_| CacheError::MalformedIndexFile)?;
 
             index.insert(
-                resource.to_ascii_lowercase(),
+                resource.replace('\\', "/").to_ascii_lowercase(),
                 IndexEntry {
                     path: path.to_string(),
                     md5: md5.to_string(),
@@ -123,8 +124,10 @@ pub trait SharedCache {
     /// for [`CacheReader`] this is the currently-installed version
     /// for [`CacheDownloader`] this is the version currently on the CDN
     fn client_version(&self) -> &str;
-    /// Returns true if the resource is available in the current SharedCache
-    /// for [`CacheReader`] this requires the resource to have been downloaded by the game launcher
+    /// Iterator view on all resources known in this SharedCache
+    fn iter_resources(&self) -> impl Iterator<Item=&str>;
+    /// Returns true if the resource is available in this SharedCache
+    /// for [`CacheReader`] this returns true if a resource is listed in the index file but not yet downloaded by the game launcher
     fn has_resource(&self, resource: &str) -> bool;
     /// Retrieves the bytes of a resource
     /// for [`CacheDownloader`] downloads if necessary
@@ -185,6 +188,10 @@ impl CacheReader {
 impl SharedCache for CacheReader {
     fn client_version(&self) -> &str {
         &*self.client_version
+    }
+
+    fn iter_resources(&self) -> impl Iterator<Item=&str> {
+        self.index.keys().map(String::as_str)
     }
 
     fn has_resource(&self, resource: &str) -> bool {
@@ -387,6 +394,10 @@ impl CacheDownloader {
 impl SharedCache for CacheDownloader {
     fn client_version(&self) -> &str {
         &*self.client_version
+    }
+
+    fn iter_resources(&self) -> impl Iterator<Item=&str> {
+        Keys::chain(self.app_index.keys(), self.res_index.keys()).map(String::as_str)
     }
 
     fn has_resource(&self, resource: &str) -> bool {

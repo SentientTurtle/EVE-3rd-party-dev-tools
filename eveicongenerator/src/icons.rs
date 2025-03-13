@@ -228,7 +228,9 @@ pub enum OutputMode<'a> {
     ServiceBundle { out: &'a Path },
     IEC { out: &'a Path },
     Web { out: &'a Path, copy_files: bool, hard_link: bool },
-    Checksum { out: Option<&'a Path> }
+    Checksum { out: Option<&'a Path> },
+    AuxIcons { out: &'a Path },
+    AuxImages { out: &'a Path }
 }
 
 pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool, silent_mode: bool) -> Result<(usize, usize), IconError> {
@@ -457,27 +459,27 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
     let to_add = new_index.iter().filter(|key| !old_index.contains(*key)).map(String::as_str).collect::<Vec<&str>>();
 
     if to_add.len() == 0 && to_remove.len() == 0 && skip_output_if_fresh {
-        if !silent_mode { println!("Icons fresh, skipping outputs..."); }
-        if let Some(mut log) = log_file { writeln!(log, "Icons fresh, skipping outputs...")?; }
+        if !silent_mode { println!("Icons fresh, skipping output..."); }
+        if let Some(mut log) = log_file { writeln!(log, "Icons fresh, skipping output...")?; }
     } else {
-        if !silent_mode { println!("Icons built, generating outputs..."); }
-        if let Some(mut log) = log_file { writeln!(log, "Icons built, generating outputs...")?; }
+        if !silent_mode { println!("Icons built, generating output..."); }
+        if let Some(mut log) = log_file { writeln!(log, "Icons built, generating output...")?; }
         match output_mode {
             OutputMode::ServiceBundle { out} => {
                 if let Some(mut log) = log_file { writeln!(log, "Writing Service Bundle to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
                 for filename in &new_index {
+                    if let Some(mut log) = log_file { writeln!(log, "\t{}", filename)?; }
                     writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored))
                         .map_err(|e| format!("err in {}: {}", filename, e))
                         .map_err(io::Error::other)?;
-                    if let Some(mut log) = log_file { writeln!(log, "\t{}", filename)?; }
                     io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                 }
 
                 writer.start_file("service_metadata.json", FileOptions::<()>::default()).map_err(io::Error::other)?;
                 serde_json::to_writer_pretty(&mut writer, &service_metadata).map_err(io::Error::other)?;
 
-                writer.finish().map_err(io::Error::other)?;
+                writer.finish().map_err(io::Error::other)?.flush()?;
             }
             OutputMode::IEC { out } => {
                 if let Some(mut log) = log_file { writeln!(log, "Writing IEC archive to {:?}", out)?; }
@@ -488,27 +490,27 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                         match icon_kind {
                             IconKind::Icon => {
                                 let output_name = format!("{}_64.png", type_id);
-                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
+                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                             IconKind::Blueprint | IconKind::Reaction | IconKind::Relic => { /* None, these are duplicated by IconKind::Icon */}
                             IconKind::BlueprintCopy => {
                                 let output_name = format!("{}_bpc_64.png", type_id);
-                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
+                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                             IconKind::Render => {
                                 let output_name = format!("{}_512.jpg", type_id);
-                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
+                                writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                         }
                     }
                 }
-                writer.finish().map_err(io::Error::other)?;
+                writer.finish().map_err(io::Error::other)?.flush()?;
             }
             OutputMode::Web { out, copy_files, hard_link } => {
                 let mode_name = if copy_files { "COPYING" } else if hard_link { "HARD LINK" } else { "SOFT LINK" };
@@ -574,10 +576,46 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 }
                 serde_json::to_writer(File::create(&index_path)?, &created_files).map_err(io::Error::other)?;
             }
-            OutputMode::Checksum { out: Some(outfile) } => {
-                fs::write(outfile, format!("{:x}", md5::compute(&index_bytes)))?;
+            OutputMode::Checksum { out } => {
+                let checksum = md5::compute(&index_bytes);
+                if let Some(mut log) = log_file { writeln!(log, "Checksum:{:x}", checksum)?; }
+                if let Some(outfile) = out {
+                    fs::write(outfile, format!("{:x}", checksum))?
+                } else {
+                    print!("{:x}", md5::compute(&index_bytes))
+                }
+            },
+            // Auxiliary outputs don't use the icon cache, but updating/checking it is quite fast so these outputs don't skip it
+            OutputMode::AuxIcons { out } => {
+                if let Some(mut log) = log_file { writeln!(log, "Writing Auxiliary Icon dump archive to {:?}", out)?; }
+                let mut writer = ZipWriter::new(File::create(out)?);
+                for (icon_id, resource) in &data.icon_files {
+                    let (_path, extension) = resource.rsplit_once('.')
+                        .or_else(|| resource.rsplit_once('/'))
+                        .unwrap_or(("", resource));
+
+                    if let Some(mut log) = log_file { writeln!(log, "\t{}: {}", icon_id, resource)?; }
+                    
+                    let resource_path = cache.path_of(resource)?;
+                    writer.start_file(format!("{}.{}", icon_id, extension), FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                    std::io::copy(&mut File::open(resource_path)?, &mut writer)?;
+                }
+                writer.finish().map_err(io::Error::other)?.flush()?;
             }
-            OutputMode::Checksum { out: None } => print!("{:x}", md5::compute(&index_bytes)),
+            OutputMode::AuxImages { out } => {
+                if let Some(mut log) = log_file { writeln!(log, "Writing Auxiliary All-Images dump archive to {:?}", out)?; }
+                let mut writer = ZipWriter::new(File::create(out)?);
+                for resource in cache.iter_resources().filter(|resource| resource.ends_with("png") || resource.ends_with("jpg")) {
+                    let (_resource_kind, filename) = resource.split_once(":/").unwrap_or(("", resource));
+                    let resource_path = cache.path_of(resource)?;
+                    
+                    if let Some(mut log) = log_file { writeln!(log, "\t{}", resource)?; }
+
+                    writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
+                    std::io::copy(&mut File::open(resource_path)?, &mut writer)?;
+                }
+                writer.finish().map_err(io::Error::other)?.flush()?;
+            },
         }
     }
 

@@ -12,7 +12,7 @@ pub mod cache;
 /// Module for "FSD" data. Unpacking requires running a binary python library, and so is unavailable on certain operating systems.
 ///
 /// Currently only supports windows
-#[cfg(feature = "enable_fsd")]   // TODO: Add macOS compatibility
+#[cfg(feature = "enable_fsd")]
 pub mod fsd;
 
 /// Module for ".static" data; Which are SQLite databases

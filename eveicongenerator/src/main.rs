@@ -146,6 +146,26 @@ fn do_main() -> Result<(), IconError> {
                         .help("Output file, if omitted, prints checksum to stdout")
                         .value_parser(ValueParser::path_buf())
                 ),
+            Command::new("aux_icons")
+                .about("Auxiliary Icon dump (zip)")
+                .arg(
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .required(true)
+                        .help("Output file")
+                        .value_parser(ValueParser::path_buf())
+                ),
+            Command::new("aux_all")
+                .about("Auxiliary All-Images dump (zip)")
+                .arg(
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .required(true)
+                        .help("Output file")
+                        .value_parser(ValueParser::path_buf())
+                ),
         ])
         .get_matches();
 
@@ -167,6 +187,8 @@ fn do_main() -> Result<(), IconError> {
             }
         },
         "checksum" => OutputMode::Checksum { out: command_args.get_one::<PathBuf>("out").map(PathBuf::as_path) },
+        "aux_icon" => OutputMode::AuxIcons { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
+        "aux_all" => OutputMode::AuxImages { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
         _ => panic!("Unknown subcommand: {}", command_name)
     };
 

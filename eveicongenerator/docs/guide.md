@@ -49,3 +49,9 @@ Output mode subcommands:
 * `checksum`
   Emits a checksum of the current icon index, writes to stdout if no output file is specified.
   * `--out <file>` Output file for checksum, optional.
+* `aux_icon`
+  Auxiliary Icon export, builds .zip archive with all "iconID" icons, in filename format `{iconID}.png`/`{iconID}.jpg`.
+  * `--out <file>` Output file for zip archive, required.
+* `aux_all`
+  Auxiliary all-image export, builds .zip archive with all images in the game cache.
+  * `--out <file>` Output file for zip archive, required.
