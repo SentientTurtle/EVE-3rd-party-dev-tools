@@ -15,6 +15,8 @@ pub enum CacheError {
     DownloadIntoGameInstall,
     /// [`CacheReader`] may only be used on the sharedcache directory of a game install
     NotGameInstall,
+    /// Attempt to use CacheDownloader with a "protected" game server
+    GameServerProtected,
     /// Cache index file could not be parsed, usually indicates out-of-date library
     MalformedIndexFile,
     /// HTTP error
@@ -72,12 +74,6 @@ impl From<serde_json::Error> for CacheError {
     fn from(value: serde_json::Error) -> Self {
         CacheError::JSON(value)
     }
-}
-
-// utility struct for json parsing
-#[derive(Deserialize)]
-pub struct ClientVersion {
-    build: String
 }
 
 /// Single entry for a file in the sharedcache
@@ -264,16 +260,26 @@ impl CacheDownloader {
             return Err(CacheError::DownloadIntoGameInstall);
         }
 
+        #[allow(non_snake_case)]
+        #[derive(Deserialize)]
+        pub struct ClientVersion {
+            buildNumber: String,
+            protected: Option<bool>
+        }
+
         let client_version = http_client.get("https://binaries.eveonline.com/eveclient_TQ.json")
             .send()?
             .error_for_status()?
-            .json::<ClientVersion>()?
-            .build;
+            .json::<ClientVersion>()?;
+
+        if client_version.protected == Some(true) {
+            Err(CacheError::GameServerProtected)?;
+        }
 
         let mut downloader = CacheDownloader {
             cache_dir,
             http_client,
-            client_version,
+            client_version: client_version.buildNumber,
             app_index: HashMap::new(),
             res_index: HashMap::new()
         };

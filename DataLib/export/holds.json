@@ -1,0 +1,285 @@
+{
+  "SMB": {
+    "attribute_id": 908,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [],
+      "excluded_groups": [],
+      "included_categories": [
+        6
+      ],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": true
+  },
+  "SMB_RORQ": {
+    "attribute_id": 908,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        28,
+        380,
+        1202,
+        463,
+        543
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": true
+  },
+  "FLEET": {
+    "attribute_id": 912,
+    "filter": null,
+    "packaged_ships": true,
+    "assembled_ships": true
+  },
+  "FUEL": {
+    "attribute_id": 1549,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        423
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "MINING": {
+    "attribute_id": 1556,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        711
+      ],
+      "excluded_groups": [],
+      "included_categories": [
+        25
+      ],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "GAS": {
+    "attribute_id": 1557,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        711
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "MINERAL": {
+    "attribute_id": 1558,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        18
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "AMMO": {
+    "attribute_id": 1573,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [],
+      "excluded_groups": [],
+      "included_categories": [
+        8
+      ],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "COMMAND_CENTER": {
+    "attribute_id": 1646,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        1027
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "PI": {
+    "attribute_id": 1653,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [],
+      "excluded_groups": [],
+      "included_categories": [
+        42,
+        43
+      ],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "QUAFE": {
+    "attribute_id": 1804,
+    "filter": {
+      "included_types": [
+        3699,
+        12865,
+        57422,
+        21661,
+        3898,
+        60575,
+        12994
+      ],
+      "excluded_types": [],
+      "included_groups": [],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "CORPSE": {
+    "attribute_id": 2467,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        14
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "BOOSTER": {
+    "attribute_id": 2657,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        303
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "SUBSYSTEM": {
+    "attribute_id": 2675,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [],
+      "excluded_groups": [],
+      "included_categories": [
+        32
+      ],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "ICE": {
+    "attribute_id": 3136,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        465
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "DEPOT": {
+    "attribute_id": 5325,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        1246
+      ],
+      "excluded_groups": [],
+      "included_categories": [],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  },
+  "INFRASTRUCTURE": {
+    "attribute_id": 5646,
+    "filter": {
+      "included_types": [],
+      "excluded_types": [],
+      "included_groups": [
+        4729,
+        1546,
+        1547,
+        1548,
+        1549,
+        1551,
+        1976,
+        4186,
+        4777,
+        4778,
+        4779,
+        4736,
+        1106,
+        427,
+        1136,
+        42,
+        43,
+        423
+      ],
+      "excluded_groups": [],
+      "included_categories": [
+        42,
+        43,
+        65,
+        66,
+        40,
+        39
+      ],
+      "excluded_categories": []
+    },
+    "packaged_ships": false,
+    "assembled_ships": false
+  }
+}
