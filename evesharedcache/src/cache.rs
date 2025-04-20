@@ -40,6 +40,7 @@ impl Display for CacheError {
             CacheError::Reqwest(err) => write!(f, "HTTP error: {}", err),
             CacheError::IO(err) => write!(f, "IO error: {}", err),
             CacheError::JSON(err) => write!(f, "JSON parsing error: {}", err),
+            CacheError::GameServerProtected => write!(f, "Game Server Protected")
         }
     }
 }
@@ -53,7 +54,8 @@ impl Error for CacheError {
             CacheError::ResourceNotFound(_) => None,
             CacheError::Reqwest(err) => Some(err),
             CacheError::IO(err) => Some(err),
-            CacheError::JSON(err) => Some(err)
+            CacheError::JSON(err) => Some(err),
+            CacheError::GameServerProtected => None
         }
     }
 }

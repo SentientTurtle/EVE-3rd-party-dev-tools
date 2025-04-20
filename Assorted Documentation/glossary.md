@@ -52,7 +52,7 @@ These data-types usually have a unique ID number, which is widely used to refer 
 * *Ship DNA*
   Compact data format for ship fittings
 > Full Description  
-> The Ship DNA format is a short hand notation to describe a ship and its fitting purely through the use of the type ids of the modules, items and the ship itself. It follows this basic format.  
+> The Ship DNA format is a shorthand notation to describe a ship and its fitting purely through the use of the type ids of the modules, items and the ship itself. It follows this basic format.  
 > First in the format is the ship id. This is followed by a colon (:). If T3 then this is followed by a list of 5 subsystems seperated with colons. This is followed by a list of module ids and quantity with colons (:) separating them. Each module id/quantity is in the format of <moduleID>;<quantity> Charges and Drones can also be included by listing them in the same fashion as modules.  
 > All modules are assumed to be fit, therefore only include modules that will fit in the ship itself.
 >
