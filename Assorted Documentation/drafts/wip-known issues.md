@@ -1,7 +1,7 @@
 # Known Issues
 
 ## Static Data Export
-* Various data bugs; The SDE is not regenerated after small bugfixes.
+* Various data bugs; The SDE is often released after major patches, but is not rebuilt after small bugfixes.
 #### Workaround:
 * Use ESI or community alternatives
 

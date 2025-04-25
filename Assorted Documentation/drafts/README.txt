@@ -1,0 +1,1 @@
+Drafts & other snippets of documentation for EVE Online 3rd party development
