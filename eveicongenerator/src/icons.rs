@@ -11,7 +11,7 @@ use std::io::{BufRead, BufReader, ErrorKind};
 use image::imageops::FilterType;
 use image::{imageops, ImageFormat, ImageReader};
 use image_blend::BufferBlend;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use zip::write::FileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -20,10 +20,15 @@ const REACTION_GROUPS: [u32; 4] = [1888, 1889, 1890, 4097];
 // Certain types have 3D models and associated graphicID, but use a 2D icon for their inventory icon
 const USE_ICON_INSTEAD_OF_GRAPHIC_GROUPS: [u32; 8] = [12, 340, 448, 479, 548, 649, 711, 4168];
 
+#[derive(Deserialize)]
 pub struct TypeInfo {
+    #[serde(rename="groupID")]
     pub group_id: u32,
+    #[serde(rename="iconID")]
     pub icon_id: Option<u32>,
+    #[serde(rename="graphicID")]
     pub graphic_id: Option<u32>,
+    #[serde(rename="metaGroupID")]
     pub meta_group_id: Option<u32>,
 }
 
