@@ -1,4 +1,4 @@
-use crate::ids::{TypeID, GroupID, CategoryID};
+use crate::types::ids::{TypeID, GroupID, CategoryID};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
