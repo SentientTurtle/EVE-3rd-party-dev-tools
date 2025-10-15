@@ -49,6 +49,32 @@ pub mod magic_constants {
     pub const MAX_TARGETING_RANGE: f64 = 300_000.0;
 }
 
+pub mod id_ranges {
+    use std::ops::RangeInclusive;
+
+    pub const VARIOUS: RangeInclusive<u32> = 0..=499_999;
+    pub const FACTIONS: RangeInclusive<u32> = 500_000..=599_999;
+    pub const NPC_CORPS: RangeInclusive<u32> = 1_000_000..=1_999_999;
+    pub const NPC_CHARS: RangeInclusive<u32> = 3_000_000..=3_999_999;
+    pub const UNIVERSES: RangeInclusive<u32> = 9_000_000..=9_999_999;
+    pub const REGIONS: RangeInclusive<u32> = 10_000_000..=19_999_999;
+    pub const CONSTELLATIONS: RangeInclusive<u32> = 20_000_000..=29_999_999;
+    pub const SOLARSYSTEMS: RangeInclusive<u32> = 30_000_000..=39_999_999;
+    pub const CELESTIALS: RangeInclusive<u32> = 40_000_000..=49_999_999;
+    pub const STARGATES: RangeInclusive<u32> = 50_000_000..=59_999_999;
+    pub const STATIONS: RangeInclusive<u32> = 60_000_000..=69_999_999;
+    pub const ASTEROIDS: RangeInclusive<u32> = 70_000_000..=79_999_999; // Note: *NOT* Asteroid Belts, ids::AsteroidBeltID is under CELESTIALS
+    pub const CONTROL_BUNKERS: RangeInclusive<u32> = 80_000_000..=80_099_999;
+    pub const WIS_PROMENADES: RangeInclusive<u32> = 81_000_000..=81_999_999;    // Press 'F' to pay respects
+    pub const PLANETARY_DISTRICTS: RangeInclusive<u32> = 82_000_000..=84_999_999;
+    pub const EVE_CHARS_2: RangeInclusive<u32> = 90_000_000..=97_999_999;
+    pub const EVE_CORPS_2: RangeInclusive<u32> = 98_000_000..=98_999_999;
+    pub const EVE_ALLIANCES_2: RangeInclusive<u32> = 99_000_000..=99_999_999;
+    pub const EVE_MIXED_CHARS_CORPS_ALLIANCES_1: RangeInclusive<u32> = 100_000_000..=2_099_999_999;
+    pub const EVE_CHARS_3: RangeInclusive<u32> = 2_100_000_000..=2_111_999_999;
+    pub const EVE_CHARS_4: RangeInclusive<u32> = 2_112_000_000..=2_129_999_999;
+}
+
 pub mod cargo {
     use crate::util::item_list::TypeList;
     use crate::types::ids::AttributeID;

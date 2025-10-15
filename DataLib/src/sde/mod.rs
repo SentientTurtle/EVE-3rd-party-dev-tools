@@ -190,35 +190,57 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct AgentInSpace {
+        #[serde(rename="_key")]
+        pub agentID: ids::CharacterID,
         pub dungeonID: ids::DungeonID,
         pub solarSystemID: ids::SolarSystemID,
         pub spawnPointID: ids::SpawnPointID,
         pub typeID: ids::TypeID
     }
     pub fn load_agents_in_space<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CharacterID, AgentInSpace), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "agentsInSpace.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<AgentInSpace, R>(archive, "agentsInSpace.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.agentID, entry))))
     }
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Eq, PartialEq)]
     pub enum AgentType {
-        NonAgent, BasicAgent, TutorialAgent, ResearchAgent, CONCORDAgent, GenericStorylineMissionAgent, StorylineMissionAgent, EventMissionAgent, FactionalWarfareAgent, EpicArcAgent, AuraAgent, CareerAgent, HeraldryAgent
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct AgentTypeWrapper {
-        pub name: AgentType
-    }
-
-    pub fn load_agent_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AgentTypeID, AgentType), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, AgentTypeWrapper>, R>(archive, "agentTypes.jsonl")
-            .map(|iter| iter.map(|value| value.map(|entry| (entry._key, entry.value.name))))
+        NonAgent,
+        BasicAgent,
+        TutorialAgent,
+        ResearchAgent,
+        CONCORDAgent,
+        GenericStorylineMissionAgent,
+        StorylineMissionAgent,
+        EventMissionAgent,
+        FactionalWarfareAgent,
+        EpicArcAgent,
+        AuraAgent,
+        CareerAgent,
+        HeraldryAgent
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    struct AgentTypeEntry {
+        #[serde(rename="_key")]
+        pub agentTypeID: ids::AgentTypeID,
+        pub name: AgentType
+    }
+
+    pub fn load_agent_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AgentTypeID, AgentType), SDELoadError>>, SDELoadError> {
+        load_file::<AgentTypeEntry, R>(archive, "agentTypes.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.agentTypeID, entry.name))))
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Ancestry {
+        #[serde(rename="_key")]
+        pub ancestryID: ids::AncestryID,
         pub bloodlineID: ids::BloodlineID,
         pub charisma: i32,
         pub intelligence: i32,
@@ -232,13 +254,16 @@ pub mod load {
     }
 
     pub fn load_ancestries<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AncestryID, Ancestry), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "ancestries.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Ancestry, R>(archive, "ancestries.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.ancestryID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Bloodline {
+        #[serde(rename="_key")]
+        pub bloodlineID: ids::BloodlineID,
         pub corporationID: ids::CorporationID,
         pub description: LocalizedString,
         pub iconID: Option<ids::IconID>,
@@ -252,19 +277,24 @@ pub mod load {
     }
 
     pub fn load_bloodlines<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::BloodlineID, Bloodline), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "bloodlines.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Bloodline, R>(archive, "bloodlines.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.bloodlineID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Blueprint {
+        #[serde(rename="_key")]
+        #[allow(unused)]    // Duplicate field
+        blueprintTypeID_key: ids::TypeID,
         pub blueprintTypeID: ids::TypeID,
         pub maxProductionLimit: i32,
         pub activities: BlueprintActivities
     }
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct BlueprintActivities {
         pub copying: Option<BPActivity>,
         pub manufacturing: Option<BPActivity>,
@@ -276,6 +306,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct BPActivity {
         #[serde(deserialize_with="deserialize_activity_materials", default)]
         pub materials: IndexMap<ids::TypeID, u32>,
@@ -372,27 +403,33 @@ pub mod load {
     }
 
     pub fn load_blueprints<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, Blueprint), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "blueprints.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Blueprint, R>(archive, "blueprints.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.blueprintTypeID, entry))))
     }
 
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Category {
+        #[serde(rename="_key")]
+        pub categoryID: ids::TypeID,
         pub name: LocalizedString,
         pub published: bool,
         pub iconID: Option<ids::IconID>
     }
 
     pub fn load_categories<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CategoryID, Category), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "categories.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Category, R>(archive, "categories.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.categoryID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Certificate {
+        #[serde(rename="_key")]
+        pub certificateID: ids::CertificateID,
         pub groupID: ids::GroupID,  // TODO: Double-check that this refers to item-groups
         pub name: LocalizedString,
         pub description: LocalizedString,
@@ -412,13 +449,16 @@ pub mod load {
     }
 
     pub fn load_certificates<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CertificateID, Certificate), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "certificates.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Certificate, R>(archive, "certificates.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.certificateID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct CharacterAttribute {
+        #[serde(rename="_key")]
+        pub characterAttributeID: ids::CharacterAttributeID,
         pub name: LocalizedString,
         pub description: String,
         pub iconID: ids::IconID,
@@ -427,19 +467,23 @@ pub mod load {
     }
 
     pub fn load_character_attributes<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CharacterAttributeID, CharacterAttribute), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "characterAttributes.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<CharacterAttribute, R>(archive, "characterAttributes.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.characterAttributeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct ContrabandType {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         #[serde(deserialize_with="deserialize_inline_entry_map")]
         pub factions: IndexMap<ids::FactionID, ContrabandTypeFaction>
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct ContrabandTypeFaction {
         pub attackMinSec: f64,
         pub confiscateMinSec: f64,
@@ -448,19 +492,23 @@ pub mod load {
     }
 
     pub fn load_contraband_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, ContrabandType), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "contrabandTypes.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<ContrabandType, R>(archive, "contrabandTypes.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct ControlTowerResource {
-        pub resources: Vec<ControlTowerResourceResource>
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
+        pub resources: Vec<ControlTowerResourceInfo>
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
-    pub struct ControlTowerResourceResource {
+    #[serde(deny_unknown_fields)]
+    pub struct ControlTowerResourceInfo {
         pub purpose: u8,
         pub quantity: u32,
         pub resourceTypeID: ids::TypeID,
@@ -469,61 +517,129 @@ pub mod load {
     }
 
     pub fn load_controltower_resources<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, ControlTowerResource), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "controlTowerResources.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<ControlTowerResource, R>(archive, "controlTowerResources.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct CorporationActivity {
+        #[serde(rename="_key")]
+        pub corporationActivityID: ids::CorporationActivityID,
         pub name: LocalizedString
     }
 
     pub fn load_corporation_activities<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CorporationActivityID, CorporationActivity), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "corporationActivities.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<CorporationActivity, R>(archive, "corporationActivities.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.corporationActivityID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct WarfareBuff {
+        #[serde(rename="_key")]
+        pub warfareBuffID: ids::WarfareBuffID,
         pub aggregateMode: WarfareBuffAggregateMode,
         pub developerDescription: String,
         pub displayName: Option<LocalizedString>,
-        pub itemModifiers: Option<Vec<WarfareBuffItemModifier>>,
-        pub locationGroupModifiers: Option<Vec<WarfareBuffLocationGroupModifier>>,
-        pub locationModifiers: Option<Vec<WarfareBuffLocationModifier>>,
-        pub locationRequiredSkillModifiers: Option<Vec<WarfareBuffLocationRequiredSkillModifier>>,
+        #[serde(default)]
+        #[serde(deserialize_with="deserialize_warfarebuff_item_modifiers")]
+        pub itemModifiers: Vec<ids::AttributeID>,
+        #[serde(default)]
+        pub locationGroupModifiers: Vec<WarfareBuffLocationGroupModifier>,
+        #[serde(default)]
+        #[serde(deserialize_with="deserialize_warfarebuff_location_modifiers")]
+        pub locationModifiers: Vec<ids::AttributeID>,
+        #[serde(default)]
+        pub locationRequiredSkillModifiers: Vec<WarfareBuffLocationRequiredSkillModifier>,
         pub operationName: WarfareBuffOperation,
         pub showOutputValueInUI: WarfareBuffUIMode
     }
 
+    fn deserialize_warfarebuff_item_modifiers<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<ids::AttributeID>, D::Error> {
+        struct SeqVisitor;
+        impl<'de> Visitor<'de> for SeqVisitor {
+            type Value = Vec<ids::AttributeID>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("array of warfarebuff item modifier attributes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+                #[derive(Debug, Deserialize)]
+                #[allow(non_snake_case)]
+                #[serde(deny_unknown_fields)]
+                struct WarfareBuffItemModifier {
+                    pub dogmaAttributeID: ids::AttributeID
+                }
+
+                let size_hint = seq.size_hint();
+                let mut vec = size_hint.map(Vec::with_capacity).unwrap_or_else(Vec::new);
+                while let Some(value) = seq.next_element::<WarfareBuffItemModifier>()? {
+                    vec.push(value.dogmaAttributeID)
+                }
+                Ok(vec)
+            }
+        }
+
+        deserializer.deserialize_seq(SeqVisitor)
+    }
+
+    fn deserialize_warfarebuff_location_modifiers<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<ids::AttributeID>, D::Error> {
+        struct SeqVisitor;
+        impl<'de> Visitor<'de> for SeqVisitor {
+            type Value = Vec<ids::AttributeID>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("array of warfarebuff location modifier attributes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+                let size_hint = seq.size_hint();
+                let mut vec = size_hint.map(Vec::with_capacity).unwrap_or_else(Vec::new);
+                while let Some(value) = seq.next_element::<WarfareBuffLocationModifier>()? {
+                    vec.push(value.dogmaAttributeID)
+                }
+                Ok(vec)
+            }
+        }
+
+        deserializer.deserialize_seq(SeqVisitor)
+    }
+
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    struct WarfareBuffLocationModifier {
+        pub dogmaAttributeID: ids::AttributeID
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub enum WarfareBuffAggregateMode {
         Maximum, Minimum
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub enum WarfareBuffOperation {
         PostMul, PostPercent, ModAdd, PostAssignment
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub enum WarfareBuffUIMode {
         ShowNormal, Hide, ShowInverted
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
-    pub struct WarfareBuffItemModifier {
-        pub dogmaAttributeID: ids::AttributeID
-    }
-
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct WarfareBuffLocationGroupModifier {
         pub dogmaAttributeID: ids::AttributeID,
         pub groupID: ids::GroupID
@@ -531,37 +647,38 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
-    pub struct WarfareBuffLocationModifier {
-        pub dogmaAttributeID: ids::AttributeID
-    }
-
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct WarfareBuffLocationRequiredSkillModifier {
         pub dogmaAttributeID: ids::AttributeID,
         pub skillID: ids::TypeID
     }
 
     pub fn load_dbuff_collections<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::WarfareBuffID, WarfareBuff), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "dbuffCollections.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<WarfareBuff, R>(archive, "dbuffCollections.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.warfareBuffID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct AttributeCategory {
+        #[serde(rename="_key")]
+        pub attributeCategoryID: ids::AttributeCategoryID,
         pub name: String,
         pub description: Option<String>
     }
 
     pub fn load_dogma_attribute_categories<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AttributeCategoryID, AttributeCategory), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "dogmaAttributeCategories.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<AttributeCategory, R>(archive, "dogmaAttributeCategories.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.attributeCategoryID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Attribute {
+        #[serde(rename="_key")]
+        pub attributeID: ids::AttributeID,
         pub attributeCategoryID: Option<ids::AttributeCategoryID>,
         pub chargeRechargeTimeID: Option<u32>,    // TODO: Unknown ID
         pub dataType: i32,  // TODO: What's this?
@@ -582,13 +699,16 @@ pub mod load {
     }
 
     pub fn load_dogma_attributes<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AttributeID, Attribute), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "dogmaAttributes.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Attribute, R>(archive, "dogmaAttributes.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.attributeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Effect {
+        #[serde(rename="_key")]
+        pub effectID: ids::EffectID,
         pub description: Option<LocalizedString>,
         pub disallowAutoRepeat: bool,
         pub dischargeAttributeID: Option<ids::AttributeID>,
@@ -604,7 +724,8 @@ pub mod load {
         pub isAssistance: bool,
         pub isOffensive: bool,
         pub isWarpSafe: bool,
-        pub modifierInfo: Option<Vec<ModifierInfo>>,
+        #[serde(default)]
+        pub modifierInfo: Vec<ModifierInfo>,
         pub name: String,
         pub npcActivationChanceAttributeID: Option<ids::AttributeID>,
         pub npcUsageChanceAttributeID: Option<ids::AttributeID>,
@@ -619,6 +740,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct ModifierInfo {
         pub domain: String,
         pub func: String,
@@ -631,26 +753,32 @@ pub mod load {
     }
 
     pub fn load_dogma_effects<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::EffectID, Effect), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "dogmaEffects.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Effect, R>(archive, "dogmaEffects.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.effectID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct DogmaUnit {
+        #[serde(rename="_key")]
+        pub unitID: ids::UnitID,    // TODO: Merge unitID with util::unit::Unit
         pub description: Option<LocalizedString>,
         pub displayName: Option<LocalizedString>,
         pub name: String,
     }
 
     pub fn load_dogma_units<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::UnitID, DogmaUnit), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "dogmaUnits.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<DogmaUnit, R>(archive, "dogmaUnits.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.unitID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct DynamicItemAttributes {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         #[serde(deserialize_with="deserialize_inline_entry_map")]
         pub attributeIDs: IndexMap<ids::AttributeID, DynamicItemAttributesAttribute>,
         pub inputOutputMapping: Vec<DynamicItemAttributesIOMapping>
@@ -658,6 +786,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct DynamicItemAttributesAttribute {
         pub highIsGood: Option<bool>,
         pub max: f64,
@@ -666,19 +795,23 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct DynamicItemAttributesIOMapping {
         pub applicableTypes: Vec<ids::TypeID>,
         pub resultingType: ids::TypeID
     }
 
     pub fn load_dynamic_item_attributes<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, DynamicItemAttributes), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "dynamicItemAttributes.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<DynamicItemAttributes, R>(archive, "dynamicItemAttributes.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Faction {
+        #[serde(rename="_key")]
+        pub factionID: ids::FactionID,
         pub corporationID: Option<ids::CorporationID>,
         pub description: LocalizedString,
         pub flatLogo: Option<String>,
@@ -694,30 +827,37 @@ pub mod load {
     }
 
     pub fn load_factions<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::FactionID, Faction), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "factions.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Faction, R>(archive, "factions.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.factionID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Graphic {
+        #[serde(rename="_key")]
+        pub graphicID: ids::GraphicID,
         pub graphicFile: Option<String>,
         pub iconFolder: Option<String>,
         pub sofFactionName: Option<String>,
         pub sofHullName: Option<String>,
-        pub sofLayout: Option<Vec<String>>,
+        #[serde(default)]
+        pub sofLayout: Vec<String>,
         pub sofMaterialSetID: Option<ids::MaterialSetID>,
         pub sofRaceName: Option<String>,
     }
 
     pub fn load_graphics<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::GraphicID, Graphic), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "graphics.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Graphic, R>(archive, "graphics.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.graphicID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Group {
+        #[serde(rename="_key")]
+        pub groupID: ids::GroupID,
         pub anchorable: bool,
         pub anchored: bool,
         pub categoryID: ids::CategoryID,
@@ -729,24 +869,30 @@ pub mod load {
     }
 
     pub fn load_groups<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::GroupID, Group), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "groups.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Group, R>(archive, "groups.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.groupID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Icon {
+        #[serde(rename="_key")]
+        pub iconID: ids::IconID,
         pub iconFile: String
     }
 
     pub fn load_icons<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::IconID, Icon), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "icons.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Icon, R>(archive, "icons.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.iconID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Landmark {
+        #[serde(rename="_key")]
+        pub landmarkID: ids::LandmarkID,
         pub description: LocalizedString,
         pub iconID: Option<ids::IconID>,
         pub locationID: Option<ids::LocationID>,
@@ -755,13 +901,16 @@ pub mod load {
     }
 
     pub fn load_landmarks<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::LandmarkID, Landmark), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "landmarks.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Landmark, R>(archive, "landmarks.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.landmarkID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct AsteroidBelt {
+        #[serde(rename="_key")]
+        pub asteroidBeltID: ids::AsteroidBeltID,
         pub celestialIndex: u32,
         pub orbitID: ids::ItemID,
         pub orbitIndex: u32,
@@ -775,6 +924,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct AsteroidBeltStatistics {
         pub density: f64,
         pub eccentricity: f64,
@@ -791,13 +941,16 @@ pub mod load {
     }
 
     pub fn load_asteroid_belts<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AsteroidBeltID, AsteroidBelt), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapAsteroidBelts.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<AsteroidBelt, R>(archive, "mapAsteroidBelts.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.asteroidBeltID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Constellation {
+        #[serde(rename="_key")]
+        pub constellationID: ids::ConstellationID,
         pub regionID: ids::RegionID,
         pub factionID: Option<ids::FactionID>,
         pub position: Position,
@@ -807,20 +960,25 @@ pub mod load {
     }
 
     pub fn load_constellations<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::ConstellationID, Constellation), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapConstellations.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Constellation, R>(archive, "mapConstellations.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.constellationID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Moon {
+        #[serde(rename="_key")]
+        pub moonID: ids::MoonID,
         pub attributes: MoonAttributes,
         pub celestialIndex: u32,
-        pub npcStationIDs: Option<Vec<ids::StationID>>,
+        #[serde(default)]
+        pub npcStationIDs: Vec<ids::StationID>,
         pub orbitID: ids::ItemID,
         pub orbitIndex: u32,
         pub position: Position,
         pub radius: f64,
+        pub solarSystemID: ids::SolarSystemID,
         pub statistics: Option<MoonStatistics>,
         pub typeID: ids::TypeID,
         pub uniqueName: Option<LocalizedString>
@@ -828,6 +986,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct MoonStatistics {
         pub density: f64,
         pub eccentricity: f64,
@@ -846,6 +1005,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct MoonAttributes {
         pub heightMap1: u32,
         pub heightMap2: u32,
@@ -853,18 +1013,24 @@ pub mod load {
     }
 
     pub fn load_moons<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::MoonID, Moon), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapMoons.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Moon, R>(archive, "mapMoons.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.moonID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Planet {
-        pub asteroidBeltIDs: Option<Vec<ids::AsteroidBeltID>>,
+        #[serde(rename="_key")]
+        pub planetID: ids::PlanetID,
+        #[serde(default)]
+        pub asteroidBeltIDs: Vec<ids::AsteroidBeltID>,
         pub attributes: PlanetAttributes,
         pub celestialIndex: u32,
-        pub moonIDs: Option<Vec<ids::MoonID>>,
-        pub npcStationIDs: Option<Vec<ids::StationID>>,
+        #[serde(default)]
+        pub moonIDs: Vec<ids::MoonID>,
+        #[serde(default)]
+        pub npcStationIDs: Vec<ids::StationID>,
         pub orbitID: Option<ids::ItemID>,
         pub position: Position,
         pub radius: f64,
@@ -876,6 +1042,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct PlanetStatistics {
         pub density: f64,
         pub eccentricity: f64,
@@ -894,6 +1061,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct PlanetAttributes {
         pub heightMap1: u32,
         pub heightMap2: u32,
@@ -902,13 +1070,16 @@ pub mod load {
     }
 
     pub fn load_planets<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::PlanetID, Planet), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapPlanets.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Planet, R>(archive, "mapPlanets.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.planetID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Region {
+        #[serde(rename="_key")]
+        pub regionID: ids::RegionID,
         pub constellationIDs: Vec<ids::ConstellationID>,
         pub description: Option<LocalizedString>,
         pub factionID: Option<ids::FactionID>,
@@ -919,46 +1090,56 @@ pub mod load {
     }
 
     pub fn load_regions<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::RegionID, Region), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapRegions.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Region, R>(archive, "mapRegions.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.regionID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct SolarSystem {
+        #[serde(rename="_key")]
+        pub solarSystemID: ids::SolarSystemID,
         pub border: Option<bool>,
         pub constellationID: ids::ConstellationID,
         pub corridor: Option<bool>,
-        pub disallowedAnchorCategories: Option<Vec<ids::CategoryID>>,
-        pub disallowedAnchorGroups: Option<Vec<ids::GroupID>>,
+        #[serde(default)]
+        pub disallowedAnchorCategories: Vec<ids::CategoryID>,
+        #[serde(default)]
+        pub disallowedAnchorGroups: Vec<ids::GroupID>,
         pub factionID: Option<ids::FactionID>,
         pub fringe: Option<bool>,
         pub hub: Option<bool>,
         pub international: Option<bool>,
         pub luminosity: Option<f64>,
         pub name: LocalizedString,
-        pub planetIDs: Option<Vec<ids::PlanetID>>,
+        #[serde(default)]
+        pub planetIDs: Vec<ids::PlanetID>,
         pub position: Position,
         pub radius: f64,
         pub regionID: ids::RegionID,
         pub regional: Option<bool>,
-        // pub secondarySun: Option<SecondarySun>, Removed T.T CCPls
+        // pub secondarySun: Option<SecondarySun>, Removed T.T CCPls; TODO: Add doc comment on type pointing to hardcoded data entry for this
         pub securityClass: Option<String>,
         pub securityStatus: f64,
         pub starID: Option<ids::StarID>,
-        pub stargateIDs: Option<Vec<ids::StargateID>>,
+        #[serde(default)]
+        pub stargateIDs: Vec<ids::StargateID>,
         pub visualEffect: Option<String>,
         pub wormholeClassID: Option<ids::WormholeClassID>,
     }
 
     pub fn load_solarsystems<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::SolarSystemID, SolarSystem), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapSolarSystems.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<SolarSystem, R>(archive, "mapSolarSystems.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.solarSystemID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Stargate {
+        #[serde(rename="_key")]
+        pub stargateID: ids::StargateID,
         pub destination: StargateDestination,
         pub position: Position,
         pub solarSystemID: ids::SolarSystemID,
@@ -967,19 +1148,23 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct StargateDestination {
         pub solarSystemID: ids::SolarSystemID,
         pub stargateID: ids::StargateID
     }
 
     pub fn load_stargates<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::StargateID, Stargate), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapStargates.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Stargate, R>(archive, "mapStargates.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.stargateID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Star {
+        #[serde(rename="_key")]
+        pub starID: ids::StarID,
         pub radius: f64,
         pub solarSystemID: ids::SolarSystemID,
         pub statistics: StarStatistics,
@@ -988,6 +1173,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct StarStatistics {
         pub age: f64,
         pub life: f64,
@@ -997,13 +1183,16 @@ pub mod load {
     }
 
     pub fn load_stars<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::StarID, Star), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "mapStars.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Star, R>(archive, "mapStars.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.starID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct MarketGroup {
+        #[serde(rename="_key")]
+        pub marketGroupID: ids::MarketGroupID,
         pub description: Option<LocalizedString>,
         pub hasTypes: bool,
         pub iconID: Option<ids::IconID>,
@@ -1012,8 +1201,8 @@ pub mod load {
     }
 
     pub fn load_market_groups<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::MarketGroupID, MarketGroup), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "marketGroups.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<MarketGroup, R>(archive, "marketGroups.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.marketGroupID, entry))))
     }
 
     #[derive(Debug)]
@@ -1071,7 +1260,10 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct MetaGroup {
+        #[serde(rename="_key")]
+        pub metaGroupID: ids::MetaGroupID,
         pub color: Option<MetaGroupColor>,
         pub name: LocalizedString,
         pub iconID: Option<ids::IconID>,
@@ -1081,6 +1273,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct MetaGroupColor {
         pub r: f64,
         pub g: f64,
@@ -1088,13 +1281,16 @@ pub mod load {
     }
 
     pub fn load_meta_groups<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::MetaGroupID, MetaGroup), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "metaGroups.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<MetaGroup, R>(archive, "metaGroups.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.metaGroupID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct NpcCharacter {
+        #[serde(rename="_key")]
+        pub characterID: ids::CharacterID,
         pub agent: Option<NpcCharacterAgent>,
         pub ancestryID: Option<ids::AncestryID>,
         pub bloodlineID: ids::BloodlineID,
@@ -1107,20 +1303,23 @@ pub mod load {
         pub name: LocalizedString,
         pub raceID: ids::RaceID,
         pub schoolID: Option<ids::SchoolID>,
-        pub skills: Option<Vec<NpcCharacterSkill>>,
-        pub specialtyID: Option<ids::SpecialtyID>,
+        #[serde(default)]
+        pub skills: Vec<NpcCharacterSkill>,
+        pub specialityID: Option<ids::SpecialtyID>,
         pub startDate: Option<String>,
         pub uniqueName: bool
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct NpcCharacterSkill {
         pub typeID: ids::TypeID
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct NpcCharacterAgent {
         pub agentTypeID: ids::TypeID,
         pub divisionID: ids::DivisionID,
@@ -1129,13 +1328,16 @@ pub mod load {
     }
 
     pub fn load_npc_characters<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CharacterID, NpcCharacter), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "npcCharacters.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<NpcCharacter, R>(archive, "npcCharacters.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.characterID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct NpcCorporationDivision {
+        #[serde(rename="_key")]
+        pub divisionID: ids::DivisionID,
         pub description: Option<LocalizedString>,
         pub displayName: Option<String>,
         pub internalName: String,
@@ -1144,13 +1346,16 @@ pub mod load {
     }
 
     pub fn load_npc_corporation_divisions<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::DivisionID, NpcCorporationDivision), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "npcCorporationDivisions.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<NpcCorporationDivision, R>(archive, "npcCorporationDivisions.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.divisionID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct NpcCorporation {
+        #[serde(rename="_key")]
+        pub corporationID: ids::CorporationID,
         pub allowedMemberRaces: Option<Vec<ids::RaceID>>,
         pub ceoID: Option<ids::CharacterID>,
         #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
@@ -1170,7 +1375,8 @@ pub mod load {
         pub initialPrice: f64,
         #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
         pub investors: IndexMap<ids::CorporationID, i32>,
-        pub lpOfferTables: Option<Vec<u32>>,    // TODO: Assign ID type
+        #[serde(default)]
+        pub lpOfferTables: Vec<u32>,    // TODO: Assign ID type
         pub mainActivityID: Option<i32>,    // TODO: Assign ID type, possibly station activity ID?
         pub memberLimit: i32,
         pub minSecurity: f64,
@@ -1191,6 +1397,7 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct CorporationDivision {
         pub divisionNumber: i32,
         pub leaderID: ids::CharacterID,
@@ -1198,13 +1405,16 @@ pub mod load {
     }
 
     pub fn load_npc_corporations<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CorporationID, NpcCorporation), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "npcCorporations.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<NpcCorporation, R>(archive, "npcCorporations.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.corporationID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct NpcStation {
+        #[serde(rename="_key")]
+        pub stationID: ids::StationID,
         pub celestialIndex: Option<u32>,
         pub operationID: ids::StationOperationID,
         pub orbitID: ids::ItemID,
@@ -1220,12 +1430,13 @@ pub mod load {
     }
 
     pub fn load_npc_stations<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::StationID, NpcStation), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "npcStations.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<NpcStation, R>(archive, "npcStations.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.stationID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     #[serde(untagged)]
     pub enum PlanetResource {
         Star { power: i32, },
@@ -1243,12 +1454,15 @@ pub mod load {
 
     pub fn load_planet_resources<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::PlanetID, PlanetResource), SDELoadError>>, SDELoadError> {
         load_file::<InlineEntry<_, _>, R>(archive, "planetResources.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+            .map(|iter| iter.map(|res| res.map(|entry| (entry._key, entry.value))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct PlanetSchematic {
+        #[serde(rename="_key")]
+        pub schematicID: ids::PlanetSchematicID,
         pub cycleTime: u32,
         pub name: LocalizedString,
         pub pins: Vec<ids::TypeID>,
@@ -1258,19 +1472,23 @@ pub mod load {
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct PlanetSchematicType {
         pub isInput: bool,
         pub quantity: u32
     }
 
     pub fn load_planet_schematics<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::PlanetSchematicID, PlanetSchematic), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "planetSchematics.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<PlanetSchematic, R>(archive, "planetSchematics.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.schematicID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct CharacterRace {
+        #[serde(rename="_key")]
+        pub raceID: ids::RaceID,
         pub name: LocalizedString,
         pub description: Option<LocalizedString>,
         pub iconID: Option<ids::IconID>,
@@ -1280,13 +1498,16 @@ pub mod load {
     }
 
     pub fn load_races<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::RaceID, CharacterRace), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "races.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<CharacterRace, R>(archive, "races.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.raceID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct SkinLicense {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         pub duration: i32,
         pub licenseTypeID: ids::TypeID,
         pub skinID: ids::SkinID,
@@ -1294,25 +1515,31 @@ pub mod load {
     }
 
     pub fn load_skin_licenses<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, SkinLicense), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "skinLicenses.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<SkinLicense, R>(archive, "skinLicenses.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct SkinMaterial {
+        #[serde(rename="_key")]
+        pub materialID: ids::SkinMaterialID,
         pub displayName: Option<LocalizedString>,
         pub materialSetID: ids::MaterialSetID,
     }
 
     pub fn load_skin_materials<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::SkinMaterialID, SkinMaterial), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "skinMaterials.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<SkinMaterial, R>(archive, "skinMaterials.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.materialID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Skin {
+        #[serde(rename="_key")]
+        pub skinID: ids::SkinID,
         pub allowCCPDevs: bool,
         pub internalName: String,
         pub skinMaterialID: ids::SkinMaterialID,
@@ -1324,13 +1551,16 @@ pub mod load {
     }
 
     pub fn load_skins<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::SkinID, Skin), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "skins.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Skin, R>(archive, "skins.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.skinID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct SovereigntyUpgrade {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         pub mutually_exclusive_group: String,
         pub power_allocation: i32,
         pub workforce_allocation: i32,
@@ -1340,13 +1570,16 @@ pub mod load {
     }
 
     pub fn load_sovereignty_upgrades<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, SovereigntyUpgrade), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "sovereigntyUpgrades.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<SovereigntyUpgrade, R>(archive, "sovereigntyUpgrades.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct StationOperation {
+        #[serde(rename="_key")]
+        pub operationID: ids::StationOperationID,
         pub activityID: ids::StationActivityID,
         pub border: f64,
         pub corridor: f64,
@@ -1363,59 +1596,56 @@ pub mod load {
     }
 
     pub fn load_station_operations<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::StationOperationID, StationOperation), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "stationOperations.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<StationOperation, R>(archive, "stationOperations.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.operationID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct StationService {
+        #[serde(rename="_key")]
+        pub serviceID: ids::StationServiceID,
         pub serviceName: LocalizedString,
         pub description: Option<LocalizedString>,
     }
 
     pub fn load_station_services<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::StationServiceID, StationService), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "stationServices.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
-    }
-
-    #[derive(Debug, Deserialize, Hash, Eq, PartialEq, Ord, PartialOrd)]
-    #[allow(non_snake_case, non_camel_case_types)]
-    pub enum TranslationLanguage {
-        en,
-        de,
-        es,
-        fr,
-        ja,
-        ko,
-        ru,
-        zh,
-        it
+        load_file::<StationService, R>(archive, "stationServices.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.serviceID, entry))))
     }
 
     #[derive(Debug, Deserialize, Hash, Eq, PartialEq)]
     #[allow(non_snake_case)]
-    pub struct TranslationLanguageName {
+    #[serde(deny_unknown_fields)]
+    pub struct TranslationLanguage {
+        #[serde(rename="_key")]
+        pub shortName: String,
         pub name: String
     }
 
-    pub fn load_translation_languages<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(TranslationLanguage, TranslationLanguageName), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "translationLanguages.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+    pub fn load_translation_languages<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<TranslationLanguage, SDELoadError>>, SDELoadError> {
+        load_file::<_, R>(archive, "translationLanguages.jsonl")
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
-    pub struct TypeBonuses {   // Kinds of bonuses may be omitted, an empty collection is given for those
+    #[serde(deny_unknown_fields)]
+    pub struct TypeBonuses {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         pub iconID: Option<ids::IconID>,
-        pub miscBonuses: Option<Vec<TypeBonus>>,
-        pub roleBonuses: Option<Vec<TypeBonus>>,
+        #[serde(default)]
+        pub miscBonuses: Vec<TypeBonus>,
+        #[serde(default)]
+        pub roleBonuses: Vec<TypeBonus>,
         #[serde(default, rename = "types", deserialize_with="deserialize_explicit_entry_map")]
         pub skillBonuses: IndexMap<ids::TypeID, Vec<TypeBonus>>,
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct TypeBonus {
         pub bonusText: LocalizedString,
         pub importance: i32,
@@ -1425,58 +1655,116 @@ pub mod load {
     }
 
     pub fn load_type_bonuses<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, TypeBonuses), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "typeBonus.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<TypeBonuses, R>(archive, "typeBonus.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct TypeDogma {
-        pub dogmaAttributes: Vec<TypeDogmaAttribute>,   // TODO: Convert to map
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
+        #[serde(deserialize_with="deserialize_type_attributes")]
+        pub dogmaAttributes: IndexMap<ids::AttributeID, f64>,
         #[serde(default)]
-        pub dogmaEffects: Vec<TypeDogmaEffect>          // TODO: Convert to map
+        #[serde(deserialize_with="deserialize_type_effects")]
+        pub dogmaEffects: IndexMap<ids::EffectID, bool>
     }
 
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    pub struct TypeDogmaAttribute {
-        pub attributeID: ids::AttributeID,
-        pub value: f64
+    fn deserialize_type_attributes<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::AttributeID, f64>, D::Error> {
+        struct SeqVisitor;
+        impl<'de> Visitor<'de> for SeqVisitor {
+            type Value = IndexMap<ids::AttributeID, f64>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("array of type attributes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+                #[derive(Debug, Deserialize)]
+                #[allow(non_snake_case)]
+                #[serde(deny_unknown_fields)]
+                struct TypeDogmaAttribute {
+                    pub attributeID: ids::AttributeID,
+                    pub value: f64
+                }
+
+                let size_hint = seq.size_hint();
+                let mut map = size_hint.map(IndexMap::with_capacity).unwrap_or_else(IndexMap::new);
+                while let Some(value) = seq.next_element::<TypeDogmaAttribute>()? {
+                    map.insert(value.attributeID, value.value);
+                }
+                Ok(map)
+            }
+        }
+
+        deserializer.deserialize_seq(SeqVisitor)
     }
 
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    pub struct TypeDogmaEffect {
-        pub effectID: ids::EffectID,
-        pub isDefault: bool
+    fn deserialize_type_effects<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::EffectID, bool>, D::Error> {
+        struct SeqVisitor;
+        impl<'de> Visitor<'de> for SeqVisitor {
+            type Value = IndexMap<ids::EffectID, bool>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("array of type effects")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+                #[derive(Debug, Deserialize)]
+                #[allow(non_snake_case)]
+                #[serde(deny_unknown_fields)]
+                struct TypeDogmaEffect {
+                    pub effectID: ids::EffectID,
+                    pub isDefault: bool
+                }
+
+                let size_hint = seq.size_hint();
+                let mut map = size_hint.map(IndexMap::with_capacity).unwrap_or_else(IndexMap::new);
+                while let Some(value) = seq.next_element::<TypeDogmaEffect>()? {
+                    map.insert(value.effectID, value.isDefault);
+                }
+                Ok(map)
+            }
+        }
+
+        deserializer.deserialize_seq(SeqVisitor)
     }
 
     pub fn load_type_dogma<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, TypeDogma), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "typeDogma.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<TypeDogma, R>(archive, "typeDogma.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct TypeMaterials {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         pub materials: Vec<TypeMaterial>
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct TypeMaterial {
         pub materialTypeID: ids::TypeID,
         pub quantity: u32
     }
 
     pub fn load_type_materials<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, TypeMaterials), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "typeMaterials.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<TypeMaterials, R>(archive, "typeMaterials.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct Type {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         pub basePrice: Option<f64>,
         pub capacity: Option<f64>,
         pub description: Option<LocalizedString>,
@@ -1498,8 +1786,8 @@ pub mod load {
     }
 
     pub fn load_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, Type), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "types.jsonl")
-            .map(|iter| iter.map(|value| value.map(InlineEntry::tuple)))
+        load_file::<Type, R>(archive, "types.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
     #[derive(Debug)]
@@ -1550,7 +1838,7 @@ pub mod load {
         pub sovereignty_upgrades: IndexMap<ids::TypeID, SovereigntyUpgrade>,
         pub station_operations: IndexMap<ids::StationOperationID, StationOperation>,
         pub station_services: IndexMap<ids::StationServiceID, StationService>,
-        pub translation_languages: IndexMap<TranslationLanguage, TranslationLanguageName>,
+        pub translation_languages: Vec<TranslationLanguage>,
         pub type_bonus: IndexMap<ids::TypeID, TypeBonuses>,
         pub type_dogma: IndexMap<ids::TypeID, TypeDogma>,
         pub type_materials: IndexMap<ids::TypeID, TypeMaterials>,
