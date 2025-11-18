@@ -130,10 +130,10 @@ pub fn read_skin_materials(sde: &mut ZipArchive<File>, silent_mode: bool) -> Res
     }
 
     let mut skin_materials = HashMap::<u32, u32>::new();
-    for line in BufReader::new(sde.by_name("skinMaterials.jsonl")?).lines() {
+    for line in BufReader::new(sde.by_name("skins.jsonl")?).lines() {
         #[derive(Deserialize)]
-        struct SkinMaterial { skinMaterialID: u32 }
-        let material_info = serde_json::from_str::<Keyed<SkinMaterial>>(&*line?)?;
+        struct Skin { skinMaterialID: u32 }
+        let material_info = serde_json::from_str::<Keyed<Skin>>(&*line?)?;
         skin_materials.insert(material_info._key, material_info.content.skinMaterialID);
     }
 

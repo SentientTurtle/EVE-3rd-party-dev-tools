@@ -1,6 +1,5 @@
 #![feature(exit_status_error)]
 #![feature(iter_intersperse)]
-#![feature(path_add_extension)]
 #![feature(iter_collect_into)]
 
 use crate::icons::{IconBuildData, IconError, OutputMode};
