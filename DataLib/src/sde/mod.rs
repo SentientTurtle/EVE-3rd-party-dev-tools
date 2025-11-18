@@ -13,6 +13,7 @@ pub mod load {
     use zip::result::ZipError;
     use zip::ZipArchive;
 
+    /// Error indicating failure to load SDE
     #[derive(Debug)]
     pub enum SDELoadError {
         /// IO Error while reading from SDE
@@ -21,6 +22,7 @@ pub mod load {
         Zip(ZipError),
         /// SDE zip file did not contain expected file, did the SDE format change?
         ArchiveFileNotFound(String),
+        /// Parsing the JSON content failed, did the SDE schema change?
         ParseError { file: String, entry: usize, error: serde_json::Error}
     }
 
@@ -52,6 +54,9 @@ pub mod load {
         }
     }
 
+    /// Load a single file from the zip archive, and parse it to a datatype
+    ///
+    /// Returns an iterator over each entry
     fn load_file<'a, T: DeserializeOwned, R: Read + Seek>(archive: &'a mut ZipArchive<R>, file_name: &'a str) -> Result<impl Iterator<Item=Result<T, SDELoadError>> + use<'a, T, R>, SDELoadError> {
         let mut str_buf = String::new();
         let mut reader = BufReader::new(
@@ -67,7 +72,7 @@ pub mod load {
         );
 
         let mut entry = 0;
-        Ok(std::iter::from_fn(move || {
+        Ok(std::iter::from_fn(move || { // TODO: Replace with a proper custom iterator implementation to provide better support for skip/nth
             match reader.read_line(&mut str_buf) {
                 Ok(0) => None,
                 Ok(_) => {
@@ -81,9 +86,15 @@ pub mod load {
         }))
     }
 
-    fn deserialize_inline_entry_map<'de, K: Deserialize<'de> + Hash + Eq + Ord, V: Deserialize<'de>, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<K, V>, D::Error> {
+    /// Helper trait for `deserialize_inline_entry_map`
+    trait InlineEntry<K> {
+        fn key(&self) -> K;
+    }
+
+    /// Deserialize a json-array of [`InlineEntry`]-trait values into an IndexMap
+    fn deserialize_inline_entry_map<'de, K: Deserialize<'de> + Hash + Eq + Ord, V: Deserialize<'de> + InlineEntry<K>, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<K, V>, D::Error> {
         struct EntryVisitor<K, V>(PhantomData<K>, PhantomData<V>);
-        impl<'de, K: Deserialize<'de> + Hash + Eq + Ord, V: Deserialize<'de>> Visitor<'de> for EntryVisitor<K, V> {
+        impl<'de, K: Deserialize<'de> + Hash + Eq + Ord, V: Deserialize<'de> + InlineEntry<K>> Visitor<'de> for EntryVisitor<K, V> {
             type Value = IndexMap<K, V>;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
@@ -93,8 +104,8 @@ pub mod load {
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
                 let size_hint = seq.size_hint();
                 let mut map = size_hint.map(IndexMap::with_capacity).unwrap_or_else(IndexMap::new);
-                while let Some(value) = seq.next_element::<InlineEntry<K, V>>()? {
-                    map.insert(value._key, value.value);
+                while let Some(value) = seq.next_element::<V>()? {
+                    map.insert(InlineEntry::key(&value), value);
                 }
                 Ok(map)
             }
@@ -103,6 +114,7 @@ pub mod load {
         deserializer.deserialize_seq(EntryVisitor::<K, V>(PhantomData::default(), PhantomData::default()))
     }
 
+    /// Deserialize a json-array of [`ExplicitMapEntry`] values into an IndexMap
     fn deserialize_explicit_entry_map<'de, K: Deserialize<'de> + Hash + Eq + Ord, V: Deserialize<'de>, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<K, V>, D::Error> {
         struct EntryVisitor<K, V>(PhantomData<K>, PhantomData<V>);
         impl<'de, K: Deserialize<'de> + Hash + Eq + Ord, V: Deserialize<'de>> Visitor<'de> for EntryVisitor<K, V> {
@@ -115,7 +127,7 @@ pub mod load {
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
                 let size_hint = seq.size_hint();
                 let mut map = size_hint.map(IndexMap::with_capacity).unwrap_or_else(IndexMap::new);
-                while let Some(value) = seq.next_element::<ExplicitEntry<K, V>>()? {
+                while let Some(value) = seq.next_element::<ExplicitMapEntry<K, V>>()? {
                     map.insert(value._key, value._value);
                 }
                 Ok(map)
@@ -126,45 +138,16 @@ pub mod load {
     }
 
     // Generic types
+    /// Helper type for JSON maps that are encoded as arrays of object entries
     #[derive(Deserialize)]
-    pub struct InlineEntry<K, V> {
-        _key: K,
-        #[serde(flatten)]
-        value: V
-    }
-
-    impl<K, V> InlineEntry<K, V> {
-        #[inline(always)]
-        pub fn tuple(self) -> (K, V) {
-            (self._key, self.value)
-        }
-    }
-
-    impl<K: Hash + Eq + Ord, V> FromIterator<InlineEntry<K, V>> for IndexMap<K, V> {
-        fn from_iter<I: IntoIterator<Item=InlineEntry<K, V>>>(iter: I) -> Self {
-            IndexMap::<K, V>::from_iter(iter.into_iter().map(InlineEntry::tuple))
-        }
-    }
-
-    #[derive(Deserialize)]
-    pub struct ExplicitEntry<K, V> {
+    struct ExplicitMapEntry<K, V> {
         _key: K,
         _value: V
     }
 
-    impl<K, V> ExplicitEntry<K, V> {
-        #[inline(always)]
-        pub fn tuple(self) -> (K, V) {
-            (self._key, self._value)
-        }
-    }
-
-    impl<K: Hash + Eq + Ord, V> FromIterator<ExplicitEntry<K, V>> for IndexMap<K, V> {
-        fn from_iter<I: IntoIterator<Item=ExplicitEntry<K, V>>>(iter: I) -> Self {
-            IndexMap::<K, V>::from_iter(iter.into_iter().map(ExplicitEntry::tuple))
-        }
-    }
-
+    /// Position of an object, units in metres.
+    ///
+    /// Up/down, Left/right, Forwards/backwards directions depend on context, see <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     pub struct Position {
@@ -173,37 +156,111 @@ pub mod load {
         pub z: f64
     }
 
+    /// 2D-map position of an object, units in metres.
+    ///
+    /// Up/down, Left/right directions depend on context, see <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
     #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    pub struct Position2D {
+        pub x: f64,
+        pub y: f64
+    }
+
+    /// String with multiple language variants
+    ///
+    /// English is always available. Usually, all other languages are also available
+    ///
+    /// [`try_*`] methods will return the specified-language version if present, or fall back to the english string.
+    #[derive(Debug, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct LocalizedString {
+        /// English
         pub en: String,
+        /// German
         pub de: Option<String>,
+        /// Spanish
         pub es: Option<String>,
+        /// French
         pub fr: Option<String>,
+        /// Japanese
         pub ja: Option<String>,
+        /// Korean
         pub ko: Option<String>,
+        /// Russian
         pub ru: Option<String>,
-        pub zh: Option<String>,
-        pub it: Option<String>,
+        /// Chinese
+        pub zh: Option<String>
+    }
+
+    impl LocalizedString {
+        /// German string if available, else English string
+        pub fn try_de(&self) -> &str {
+            self.de.as_ref().unwrap_or(&self.en)
+        }
+
+        /// Spanish string if available, else English string
+        pub fn try_es(&self) -> &str {
+            self.es.as_ref().unwrap_or(&self.en)
+        }
+
+        /// French string if available, else English string
+        pub fn try_fr(&self) -> &str {
+            self.fr.as_ref().unwrap_or(&self.en)
+        }
+
+        /// Japanese string if available, else English string
+        pub fn try_ja(&self) -> &str {
+            self.ja.as_ref().unwrap_or(&self.en)
+        }
+
+        /// Korean string if available, else English string
+        pub fn try_ko(&self) -> &str {
+            self.ko.as_ref().unwrap_or(&self.en)
+        }
+
+        /// Russian string if available, else English string
+        pub fn try_ru(&self) -> &str {
+            self.ru.as_ref().unwrap_or(&self.en)
+        }
+
+        /// Chinese string if available, else English string
+        pub fn try_zh(&self) -> &str {
+            self.zh.as_ref().unwrap_or(&self.en)
+        }
     }
 
     // SDE Entry types
 
+    /// Agent (Mission NPC) that is located in space, rather than docked in a station
+    ///
+    /// Additional Agent information is contained in [`NpcCharacter`] data
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct AgentInSpace {
+        /// CharacterID for this agent
         #[serde(rename="_key")]
         pub agentID: ids::CharacterID,
+        /// 'Dungeon' within which the agent is located
+        ///
+        /// Data about dungeons is not available for EVE 3rd party developers
         pub dungeonID: ids::DungeonID,
+        /// SolarSystem in which the Agent is located
         pub solarSystemID: ids::SolarSystemID,
+        /// Spawnpoint for agent, no data available for EVE 3rd party developers
         pub spawnPointID: ids::SpawnPointID,
+        /// TypeID of the agent's ship (Note: Agent Ships are not the same as the player-flyable ship, and have different TypeIDs)
         pub typeID: ids::TypeID
     }
+
     pub fn load_agents_in_space<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CharacterID, AgentInSpace), SDELoadError>>, SDELoadError> {
         load_file::<AgentInSpace, R>(archive, "agentsInSpace.jsonl")
             .map(|iter| iter.map(|res| res.map(|entry| (entry.agentID, entry))))
     }
 
+    /// The different kinds of agent
+    ///
+    /// See <https://wiki.eveuniversity.org/Agent#Category> for information about the various kinds of Agent
     #[derive(Debug, Deserialize, Eq, PartialEq)]
     pub enum AgentType {
         NonAgent,
@@ -221,13 +278,14 @@ pub mod load {
         HeraldryAgent
     }
 
+    /// Helper type for deserializing
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     struct AgentTypeEntry {
         #[serde(rename="_key")]
-        pub agentTypeID: ids::AgentTypeID,
-        pub name: AgentType
+        agentTypeID: ids::AgentTypeID,
+        name: AgentType
     }
 
     pub fn load_agent_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::AgentTypeID, AgentType), SDELoadError>>, SDELoadError> {
@@ -235,21 +293,33 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.agentTypeID, entry.name))))
     }
 
+    /// Character Ancestry; Now-unused character creation element (Removed from player character creation 2021-03-02)
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct Ancestry {
+        /// Identifier for this Ancestry, see [`ids::AncestryID`]
         #[serde(rename="_key")]
         pub ancestryID: ids::AncestryID,
+        /// Bloodline this ancestry is a part of
         pub bloodlineID: ids::BloodlineID,
+        /// Skill training attribute modifier
         pub charisma: i32,
+        /// Skill training attribute modifier
         pub intelligence: i32,
+        /// Skill training attribute modifier
         pub memory: i32,
+        /// Skill training attribute modifier
         pub perception: i32,
+        /// Skill training attribute modifier
         pub willpower: i32,
+        /// Ancestry description as (previously) displayed in game client
         pub description: LocalizedString,
+        /// Icon, if specified
         pub iconID: Option<ids::IconID>,
+        /// Ancestry name
         pub name: LocalizedString,
+        /// Short English description
         pub shortDescription: Option<String>
     }
 
@@ -258,21 +328,33 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.ancestryID, entry))))
     }
 
+    /// Character Bloodline; Character creation element
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct Bloodline {
+        /// Identifier for this Bloodline, see [`ids::BloodlineID`]
         #[serde(rename="_key")]
         pub bloodlineID: ids::BloodlineID,
+        /// Default NPC Corporation for characters with this Bloodline
         pub corporationID: ids::CorporationID,
+        /// Bloodline description, as shown in game client
         pub description: LocalizedString,
+        /// Icon, if specified
         pub iconID: Option<ids::IconID>,
+        /// Bloodline name
         pub name: LocalizedString,
+        /// Character race this bloodline is a part of
         pub raceID: ids::RaceID,
+        /// Skill training attribute modifier
         pub charisma: i32,
+        /// Skill training attribute modifier
         pub intelligence: i32,
+        /// Skill training attribute modifier
         pub memory: i32,
+        /// Skill training attribute modifier
         pub perception: i32,
+        /// Skill training attribute modifier
         pub willpower: i32,
     }
 
@@ -281,39 +363,64 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.bloodlineID, entry))))
     }
 
+    /// Industry Blueprint. Also describes Reaction Formulae and the Sleeper Relics used in T3 production
+    ///
+    /// Note: The SDE provides Blueprint Copy and Blueprint Original data as 'merged' into a single entry for the Blueprint's typeID.
+    /// 'Copying' & 'Research Time/Material' activities are not usable with BPCs, 'Invention' activity is not usable with BPOs.
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct Blueprint {
+        /// Key; Blueprint TypeID. Duplicate of explicit `blueprintTypeID` field in entry. This library current favours using the explicit field, this may change.
+        /// In the event this is de-duplicated by removing the entry field this field will be renamed to [`Blueprint::blueprintTypeID`] to retain backwards compatibility.
         #[serde(rename="_key")]
-        #[allow(unused)]    // Duplicate field
+        #[allow(unused)]
         blueprintTypeID_key: ids::TypeID,
+        /// TypeID of this blueprint. BP Originals and BP Copies share the same TypeID.
         pub blueprintTypeID: ids::TypeID,
+        /// The maximum amount of job runs that can be "printed" on a single blueprint copy
+        ///
+        /// This is not the limit of repeats that can be scheduled in a single manufacturing/copying/etc job.
         pub maxProductionLimit: i32,
+        /// Activities available for this blueprint type
         pub activities: BlueprintActivities
     }
+
+    /// Blueprint activities for a [`Blueprint`]
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct BlueprintActivities {
+        /// Blueprint copying activity. When present on blueprint types, only applicable to blueprint *originals*
         pub copying: Option<BPActivity>,
+        /// Manufacturing activity
         pub manufacturing: Option<BPActivity>,
+        /// Material Efficiency Research activity. When present on blueprint types, only applicable to blueprint *originals*
         pub research_material: Option<BPActivity>,
+        /// Time Efficiency Research activity. When present on blueprint types, only applicable to blueprint *originals*
         pub research_time: Option<BPActivity>,
+        /// Invention activity. When present on blueprint types, only applicable to blueprint *copies*. Also applicable to Sleeper Relics
         pub invention: Option<BPActivity>,
+        /// Reaction activity
         pub reaction: Option<BPActivity>,
     }
 
+    /// Blueprint activity
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct BPActivity {
+        /// Materials and quantity required for one run of this activity
         #[serde(deserialize_with="deserialize_activity_materials", default)]
         pub materials: IndexMap<ids::TypeID, u32>,
+        /// Products, quantity, and optional probability for one run of this activity.
+        /// Only one product type is allowed per run of this activity; When multiple types of products are available, one must be selected by the player when setting up the industry job
         #[serde(deserialize_with="deserialize_activity_products", default)]
         pub products: IndexMap<ids::TypeID, (u32, Option<f64>)>,
+        /// Skills required to set up a run of this activity
         #[serde(deserialize_with="deserialize_activity_skills", default)]
         pub skills: IndexMap<ids::TypeID, numbers::SkillLevel>,
+        /// Time required for one run of this activity, in seconds
         pub time: u32
     }
     fn deserialize_activity_materials<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, u32>, D::Error> {
@@ -408,14 +515,19 @@ pub mod load {
     }
 
 
+    /// Item Type 'Category'; Collection of [Groups](Group)
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct Category {
+        /// ID for this category
         #[serde(rename="_key")]
         pub categoryID: ids::TypeID,
+        /// Name of this category
         pub name: LocalizedString,
+        /// 'Published' status; If false, not visible to players in the game client
         pub published: bool,
+        /// Icon, if specified
         pub iconID: Option<ids::IconID>
     }
 
@@ -424,28 +536,51 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.categoryID, entry))))
     }
 
+    /// Ship Mastery Certificate
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct Certificate {
+        /// ID for this certificate
         #[serde(rename="_key")]
         pub certificateID: ids::CertificateID,
-        pub groupID: ids::GroupID,  // TODO: Double-check that this refers to item-groups
+        /// Skill [`Group`] this Certificate is for
+        pub groupID: ids::GroupID,
+        /// Certificate name
         pub name: LocalizedString,
+        /// Certificate description
         pub description: LocalizedString,
+        /// Ships this certificate is recommended for
         #[serde(default)]
         pub recommendedFor: Vec<ids::TypeID>,
-        #[serde(deserialize_with="deserialize_inline_entry_map")]
-        pub skillTypes: IndexMap<ids::TypeID, CertificateSkillLevels>
+        /// Skill levels for this certificate
+        #[serde(rename="skillTypes", deserialize_with="deserialize_inline_entry_map")]
+        pub skillLevels: IndexMap<ids::TypeID, CertificateSkillLevels>
     }
 
+    /// Skill levels required for a certificate level
     #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
     pub struct CertificateSkillLevels {
+        /// Skill this 'levels' data is for
+        #[serde(rename="_key")]
+        pub skillTypeID: ids::TypeID,
+        /// Skill level required for 'basic' certificate
         pub basic: numbers::SkillLevel,
+        /// Skill level required for 'standard' certificate
         pub standard: numbers::SkillLevel,
+        /// Skill level required for 'improved' certificate
         pub improved: numbers::SkillLevel,
+        /// Skill level required for 'advanced' certificate
         pub advanced: numbers::SkillLevel,
+        /// Skill level required for 'elite' certificate
         pub elite: numbers::SkillLevel,
+    }
+
+    impl InlineEntry<ids::TypeID> for CertificateSkillLevels {
+        fn key(&self) -> ids::TypeID {
+            self.skillTypeID
+        }
     }
 
     pub fn load_certificates<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CertificateID, Certificate), SDELoadError>>, SDELoadError> {
@@ -453,16 +588,23 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.certificateID, entry))))
     }
 
+    /// Character skill training Attribute
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct CharacterAttribute {
+        /// ID for this character attribute
         #[serde(rename="_key")]
         pub characterAttributeID: ids::CharacterAttributeID,
+        /// Name
         pub name: LocalizedString,
+        /// Description, in English
         pub description: String,
+        /// Icon for attribute
         pub iconID: ids::IconID,
+        /// Notes, in English
         pub notes: String,
+        /// Short description, in English
         pub shortDescription: String
     }
 
@@ -470,25 +612,43 @@ pub mod load {
         load_file::<CharacterAttribute, R>(archive, "characterAttributes.jsonl")
             .map(|iter| iter.map(|res| res.map(|entry| (entry.characterAttributeID, entry))))
     }
-
+    /// Contraband status information for a [`Type`]
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct ContrabandType {
+        /// Type for which this Contraband information applies
         #[serde(rename="_key")]
         pub typeID: ids::TypeID,
+        /// Per-faction contraband info; An entry means the Type is contraband in the given faction
         #[serde(deserialize_with="deserialize_inline_entry_map")]
-        pub factions: IndexMap<ids::FactionID, ContrabandTypeFaction>
+        pub factions: IndexMap<ids::FactionID, ContrabandFactionInfo>
     }
 
+    /// Per-faction Contraband information
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
-    pub struct ContrabandTypeFaction {
+    pub struct ContrabandFactionInfo {
+        /// Faction for which this info applies
+        #[serde(rename="_key")]
+        pub factionID: ids::FactionID,
+        /// Minimum solarsystem security in which NPC customs agents will attack if this type of contraband is carried
+        ///
+        /// Mechanic appears to be disabled, with this value always set greater than the maximum security level of 1.0
         pub attackMinSec: f64,
+        /// Minimum solarsystem security in which NPC customs confiscate this type of contraband
         pub confiscateMinSec: f64,
+        /// Fine (multiplier * item value carried, e.g. 4.5 = 450% of the contraband's value) to be paid if caught
         pub fineByValue: f64,
+        /// Faction standing loss if caught carrying this contraband
         pub standingLoss: f64
+    }
+
+    impl InlineEntry<ids::FactionID> for ContrabandFactionInfo {
+        fn key(&self) -> ids::FactionID {
+            self.factionID
+        }
     }
 
     pub fn load_contraband_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, ContrabandType), SDELoadError>>, SDELoadError> {
@@ -496,37 +656,58 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
+    /// Resources required for Player-owned-Starbase Control Tower operation
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
-    pub struct ControlTowerResource {
+    pub struct ControlTowerResources {
+        /// TypeID of the Control Tower type this information applies to
         #[serde(rename="_key")]
         pub typeID: ids::TypeID,
+        /// Resources required for the operation of this Control Tower
         pub resources: Vec<ControlTowerResourceInfo>
     }
 
+    /// Resources required for Player-owned-Starbase Control Tower operation
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct ControlTowerResourceInfo {
-        pub purpose: u8,
+        /// Purpose for which this resource is required. (Either Online operation or Reinforcement)
+        pub purpose: ResourcePurpose,
+        /// Quantity required per hour of operation
         pub quantity: u32,
+        /// Type of the required resource
         pub resourceTypeID: ids::TypeID,
-        pub factionID: Option<ids::FactionID>,  // Fuel required if in faction's space
-        pub minSecurityLevel: Option<f64>   // Can't use default here as security can be less than zero.
+        /// If set, this resource is only required if operating in the Faction's space
+        pub factionID: Option<ids::FactionID>,
+        /// If set, this resource is only required if operating above the specified security level
+        pub minSecurityLevel: Option<f64>
     }
 
-    pub fn load_controltower_resources<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, ControlTowerResource), SDELoadError>>, SDELoadError> {
-        load_file::<ControlTowerResource, R>(archive, "controlTowerResources.jsonl")
+    #[repr(u32)]
+    #[derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Debug)]
+    pub enum ResourcePurpose {
+        /// Resource required for keeping a Control Tower online
+        Online = 1,
+        /// Resource required for Control Tower reinforcement
+        Reinforce = 4
+    }
+
+    pub fn load_controltower_resources<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, ControlTowerResources), SDELoadError>>, SDELoadError> {
+        load_file::<ControlTowerResources, R>(archive, "controlTowerResources.jsonl")
             .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry))))
     }
 
+    /// NPC Station Activity/"Specialization"
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct CorporationActivity {
+        /// ID for this activity
         #[serde(rename="_key")]
         pub corporationActivityID: ids::CorporationActivityID,
+        /// Name for this activity
         pub name: LocalizedString
     }
 
@@ -535,26 +716,37 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.corporationActivityID, entry))))
     }
 
+    /// 'Warefare Buff'; Command Burst bonus effects
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct WarfareBuff {
+        /// ID for this warfare buff. Referenced by attributes on Command Burst charges
         #[serde(rename="_key")]
         pub warfareBuffID: ids::WarfareBuffID,
+        /// Aggregate mode for multiple buffs; Whether the maximum or minimum value is selected when multiple buffs of different strengths are applied to a ship
         pub aggregateMode: WarfareBuffAggregateMode,
+        /// Developer description, in English
         pub developerDescription: String,
+        /// Display name, as shown in tooltip in-game
         pub displayName: Option<LocalizedString>,
+        /// Attributes whose effects are applied as Item Modifiers
         #[serde(default)]
         #[serde(deserialize_with="deserialize_warfarebuff_item_modifiers")]
         pub itemModifiers: Vec<ids::AttributeID>,
+        /// Attributes whose effects are applied as Location Group Modifiers
         #[serde(default)]
         pub locationGroupModifiers: Vec<WarfareBuffLocationGroupModifier>,
+        /// Attributes whose effects are applied as Location Modifiers
         #[serde(default)]
         #[serde(deserialize_with="deserialize_warfarebuff_location_modifiers")]
         pub locationModifiers: Vec<ids::AttributeID>,
+        /// Attributes whose effects are applied as Location with-required-skill Modifiers
         #[serde(default)]
         pub locationRequiredSkillModifiers: Vec<WarfareBuffLocationRequiredSkillModifier>,
+        /// Operation applied by modifiers
         pub operationName: WarfareBuffOperation,
+        /// How the effect value is displayed in-game
         pub showOutputValueInUI: WarfareBuffUIMode
     }
 
@@ -597,6 +789,13 @@ pub mod load {
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+                #[derive(Debug, Deserialize)]
+                #[allow(non_snake_case)]
+                #[serde(deny_unknown_fields)]
+                struct WarfareBuffLocationModifier {
+                    dogmaAttributeID: ids::AttributeID
+                }
+
                 let size_hint = seq.size_hint();
                 let mut vec = size_hint.map(Vec::with_capacity).unwrap_or_else(Vec::new);
                 while let Some(value) = seq.next_element::<WarfareBuffLocationModifier>()? {
@@ -609,47 +808,58 @@ pub mod load {
         deserializer.deserialize_seq(SeqVisitor)
     }
 
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    #[serde(deny_unknown_fields)]
-    struct WarfareBuffLocationModifier {
-        pub dogmaAttributeID: ids::AttributeID
-    }
-
+    /// Aggregate mode for warfare buff effect stacking
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub enum WarfareBuffAggregateMode {
-        Maximum, Minimum
+        /// If multiple buffs stack, the maximum value is selected
+        Maximum,
+        /// If multiple buffs stack, the minimum value is selected
+        Minimum
     }
 
+    /// Dogma operation for warfare buff
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub enum WarfareBuffOperation {
+        // Dogma is weird and complicated, so no individual docs on these
         PostMul, PostPercent, ModAdd, PostAssignment
     }
 
+    /// Warfare buff display mode
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub enum WarfareBuffUIMode {
-        ShowNormal, Hide, ShowInverted
+        /// Buff amount is not shown
+        Hide,
+        /// Buff amount is shown as-is, e.g. `10 -> "10%", -10 -> "-10%"`
+        ShowNormal,
+        /// Buff amount is shown inverted, e.g. `10 -> "-10%", -10 -> "10%"`
+        ShowInverted
     }
 
+    /// Attribute whose effects are applied as Location Group Modifier
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct WarfareBuffLocationGroupModifier {
+        /// Attribute source for effect
         pub dogmaAttributeID: ids::AttributeID,
+        /// Applicable group
         pub groupID: ids::GroupID
     }
 
+    /// Attributes whose effects are applied as Location with-required-skill Modifiers
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct WarfareBuffLocationRequiredSkillModifier {
+        /// Attribute source for effect
         pub dogmaAttributeID: ids::AttributeID,
+        /// Skill required by applicable types
         pub skillID: ids::TypeID
     }
 
@@ -658,13 +868,17 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.warfareBuffID, entry))))
     }
 
+    /// Attribute Category, grouping of [`Attribute`]
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct AttributeCategory {
+        /// ID for this category
         #[serde(rename="_key")]
         pub attributeCategoryID: ids::AttributeCategoryID,
+        /// Category name, in English
         pub name: String,
+        /// Description, in English
         pub description: Option<String>
     }
 
@@ -673,28 +887,47 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.attributeCategoryID, entry))))
     }
 
+    /// Dogma Attribute, describing properties for [`Type`]s. Such as HP, maximum velocity, and other item stats
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct Attribute {
+        /// ID for this attribute
         #[serde(rename="_key")]
         pub attributeID: ids::AttributeID,
+        /// (Optional) [`AttributeCategory`] for this attribute
         pub attributeCategoryID: Option<ids::AttributeCategoryID>,
-        pub chargeRechargeTimeID: Option<u32>,    // TODO: Unknown ID
-        pub dataType: i32,  // TODO: What's this?
+        /// Unknown
+        pub chargeRechargeTimeID: Option<u32>,
+        /// Unknown
+        pub dataType: i32,
+        /// Default implied value if an attribute is not explicitly given for a type
         pub defaultValue: f64,
+        /// "Developer" description in English
         pub description: Option<String>,
+        /// In-game name, as displayed in item stats
         pub displayName: Option<LocalizedString>,
+        /// If true, display this attribute when it's value is `0.0`. If false, attribute is hidden when the value is `0.0`
         pub displayWhenZero: bool,
+        /// If set to true, higher values are considered better than lower values. Inverted for false. Used for e.g. determining which module have a better attribute value than another module
         pub highIsGood: bool,
+        /// Icon for attribute, as disabled in in-game stats
         pub iconID: Option<ids::IconID>,
+        /// Attribute specifying the maximum value for this attribute
         pub maxAttributeID: Option<ids::AttributeID>,
+        /// Attribute specifying the minimum value for this attribute
         pub minAttributeID: Option<ids::AttributeID>,
+        /// "Developer" name in English
         pub name: String,
+        /// 'Published' status; If false, not visible to players in the game client
         pub published: bool,
+        /// If false, this attribute is subject to stacking penalties /* TODO: DOC LINK */
         pub stackable: bool,
-        pub tooltipDescription: Option<LocalizedString>,
+        /// Tooltip tile, as displayed when hovering over an attribute in-game
         pub tooltipTitle: Option<LocalizedString>,
+        /// Tooltip description, as displayed when hovering over an attribute in-game
+        pub tooltipDescription: Option<LocalizedString>,
+        /// [`Unit`] for this attribute's values    /* TODO: Proper link to Unit */
         pub unitID: Option<ids::UnitID>,
     }
 
@@ -780,17 +1013,25 @@ pub mod load {
         #[serde(rename="_key")]
         pub typeID: ids::TypeID,
         #[serde(deserialize_with="deserialize_inline_entry_map")]
-        pub attributeIDs: IndexMap<ids::AttributeID, DynamicItemAttributesAttribute>,
+        pub attributeIDs: IndexMap<ids::AttributeID, DynamicAttributeInfo>,
         pub inputOutputMapping: Vec<DynamicItemAttributesIOMapping>
     }
 
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
-    pub struct DynamicItemAttributesAttribute {
+    pub struct DynamicAttributeInfo {
+        #[serde(rename="_key")]
+        pub attributeID: ids::AttributeID,
         pub highIsGood: Option<bool>,
         pub max: f64,
         pub min: f64
+    }
+
+    impl InlineEntry<ids::AttributeID> for DynamicAttributeInfo {
+        fn key(&self) -> ids::AttributeID {
+            self.attributeID
+        }
     }
 
     #[derive(Debug, Deserialize)]
@@ -1116,6 +1357,7 @@ pub mod load {
         #[serde(default)]
         pub planetIDs: Vec<ids::PlanetID>,
         pub position: Position,
+        pub position2D: Option<Position2D>,
         pub radius: f64,
         pub regionID: ids::RegionID,
         pub regional: Option<bool>,
@@ -1235,7 +1477,7 @@ pub mod load {
                         lvl5: Vec::new(),
                     };
 
-                    while let Some(ExplicitEntry { _key, _value }) = seq.next_element::<ExplicitEntry<u8, Vec<ids::CertificateID>>>()? {
+                    while let Some(ExplicitMapEntry { _key, _value }) = seq.next_element::<ExplicitMapEntry<u8, Vec<ids::CertificateID>>>()? {
                         match _key {
                             0 => levels.lvl1 = _value,
                             1 => levels.lvl2 = _value,
@@ -1254,8 +1496,8 @@ pub mod load {
     }
 
     pub fn load_masteries<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, MasteryLevels), SDELoadError>>, SDELoadError> {
-        load_file::<ExplicitEntry<_, _>, R>(archive, "masteries.jsonl")
-            .map(|iter| iter.map(|value| value.map(ExplicitEntry::tuple)))
+        load_file::<ExplicitMapEntry<_, _>, R>(archive, "masteries.jsonl")
+            .map(|iter| iter.map(|value| value.map(|entry| (entry._key, entry._value))))
     }
 
     #[derive(Debug, Deserialize)]
@@ -1399,9 +1641,17 @@ pub mod load {
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct CorporationDivision {
+        #[serde(rename="_key")]
+        pub divisionID: ids::DivisionID,
         pub divisionNumber: i32,
         pub leaderID: ids::CharacterID,
         pub size: i32
+    }
+
+    impl InlineEntry<ids::DivisionID> for CorporationDivision {
+        fn key(&self) -> ids::DivisionID {
+            self.divisionID
+        }
     }
 
     pub fn load_npc_corporations<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CorporationID, NpcCorporation), SDELoadError>>, SDELoadError> {
@@ -1437,24 +1687,28 @@ pub mod load {
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
-    #[serde(untagged)]
-    pub enum PlanetResource {
-        Star { power: i32, },
-        ResourcePlanet { workforce: i32 },
-        ReagentPlanet {
-            cycle_minutes: u32,
-            harvest_silo_max: u32,
-            maturation_cycle_minutes: u32,
-            maturation_percent: u32,
-            mature_silo_max: f64,
-            reagent_harvest_amount: u32,
-            reagent_type_id: ids::TypeID
-        }
+    pub struct PlanetResource {
+        #[serde(rename="_key")]
+        pub planet_id: ids::PlanetID,
+        pub power: Option<i32>,
+        pub workforce: Option<i32>,
+        pub reagent: Option<PlanetReagent>
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct PlanetReagent {
+        pub amount_per_cycle: i32,
+        pub cycle_period: i32,  // Seconds
+        pub secured_capacity: f64,  // TODO: Are these floats or i64?
+        pub unsecured_capacity: f64,
+        pub type_id: ids::TypeID
     }
 
     pub fn load_planet_resources<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::PlanetID, PlanetResource), SDELoadError>>, SDELoadError> {
-        load_file::<InlineEntry<_, _>, R>(archive, "planetResources.jsonl")
-            .map(|iter| iter.map(|res| res.map(|entry| (entry._key, entry.value))))
+        load_file::<PlanetResource, R>(archive, "planetResources.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.planet_id, entry))))
     }
 
     #[derive(Debug, Deserialize)]
@@ -1474,8 +1728,16 @@ pub mod load {
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub struct PlanetSchematicType {
+        #[serde(rename="_key")]
+        pub typeID: ids::TypeID,
         pub isInput: bool,
         pub quantity: u32
+    }
+
+    impl InlineEntry<ids::TypeID> for PlanetSchematicType {
+        fn key(&self) -> ids::TypeID {
+            self.typeID
+        }
     }
 
     pub fn load_planet_schematics<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::PlanetSchematicID, PlanetSchematic), SDELoadError>>, SDELoadError> {
@@ -1562,11 +1824,20 @@ pub mod load {
         #[serde(rename="_key")]
         pub typeID: ids::TypeID,
         pub mutually_exclusive_group: String,
-        pub power_allocation: i32,
-        pub workforce_allocation: i32,
-        pub fuel_type_id: Option<ids::TypeID>,
-        pub fuel_startup_cost: Option<i32>,
-        pub fuel_hourly_upkeep: Option<i32>
+        pub power_allocation: Option<i32>,
+        pub power_production: Option<i32>,
+        pub workforce_allocation: Option<i32>,
+        pub workforce_production: Option<i32>,
+        pub fuel: Option<SovereigntyUpgradeFuel>
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct SovereigntyUpgradeFuel {
+        pub type_id: ids::TypeID,
+        pub startup_cost: i32,
+        pub hourly_upkeep: i32
     }
 
     pub fn load_sovereignty_upgrades<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, SovereigntyUpgrade), SDELoadError>>, SDELoadError> {
@@ -1580,7 +1851,7 @@ pub mod load {
     pub struct StationOperation {
         #[serde(rename="_key")]
         pub operationID: ids::StationOperationID,
-        pub activityID: ids::StationActivityID,
+        pub activityID: ids::CorporationActivityID,
         pub border: f64,
         pub corridor: f64,
         pub fringe: f64,
@@ -1801,7 +2072,7 @@ pub mod load {
         pub certificates: IndexMap<ids::CertificateID, Certificate>,
         pub character_attributes: IndexMap<ids::CharacterAttributeID, CharacterAttribute>,
         pub contraband_types: IndexMap<ids::TypeID, ContrabandType>,
-        pub control_tower_resources: IndexMap<ids::TypeID, ControlTowerResource>,
+        pub control_tower_resources: IndexMap<ids::TypeID, ControlTowerResources>,
         pub corporation_activities: IndexMap<ids::CorporationActivityID, CorporationActivity>,
         pub dbuff_collections: IndexMap<ids::WarfareBuffID, WarfareBuff>,
         pub dogma_attribute_categories: IndexMap<ids::AttributeCategoryID, AttributeCategory>,

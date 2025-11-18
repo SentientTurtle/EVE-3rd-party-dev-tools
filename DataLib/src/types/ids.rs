@@ -14,7 +14,6 @@ pub type AttributeCategoryID = u32;
 pub type EffectID = u32;
 pub type EffectCategoryID = u32;
 pub type StationOperationID = u32;
-pub type StationActivityID = u32;   // TODO: Possibly merge with CorporationActivityID
 pub type StationServiceID = u32;
 pub type DivisionID = u32;
 pub type FlagID = u32;
