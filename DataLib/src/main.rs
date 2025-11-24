@@ -8,7 +8,7 @@ pub fn main() -> Result<(), Box<dyn Error>> {
     println!("{}\n{}\n{}", evestaticdata::CRATE_NAME, evestaticdata::CRATE_VERSION, evestaticdata::CRATE_REPO);
 
     let start = Instant::now();
-    // sde::update::update_sde("./temp/sde.zip")?;
+    evestaticdata::sde::update::update_sde("./temp/sde.zip")?;
 
     let _sde = load_all(&mut ZipArchive::new(File::open("./temp/sde.zip")?)?)?;
     let load_time = start.elapsed().as_millis();

@@ -2014,7 +2014,10 @@ pub mod load {
     pub struct TypeMaterials {
         #[serde(rename="_key")]
         pub typeID: ids::TypeID,
-        pub materials: Vec<TypeMaterial>
+        #[serde(default)]
+        pub materials: Vec<TypeMaterial>,
+        #[serde(default)]
+        pub randomizedMaterials: Vec<TypeRandomMaterial>    // TODO: Replace this with a typeID indexed map
     }
 
     #[derive(Debug, Deserialize)]
@@ -2023,6 +2026,15 @@ pub mod load {
     pub struct TypeMaterial {
         pub materialTypeID: ids::TypeID,
         pub quantity: u32
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct TypeRandomMaterial {
+        pub materialTypeID: ids::TypeID,
+        pub quantityMax: u32,
+        pub quantityMin: u32,
     }
 
     pub fn load_type_materials<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, TypeMaterials), SDELoadError>>, SDELoadError> {
@@ -2187,7 +2199,7 @@ pub mod update {
     pub const VERSION_URL: &'static str = "https://developers.eveonline.com/static-data/tranquility/latest.jsonl";
     pub const SDE_URL: &'static str = "https://developers.eveonline.com/static-data/eve-online-static-data-latest-jsonl.zip";
 
-    #[derive(Serialize, Deserialize)]
+    #[derive(Debug, Serialize, Deserialize)]
     #[serde(tag = "_key")]
     pub enum SdeVersion {
         sde { buildNumber: u32, releaseDate: String }
@@ -2218,19 +2230,20 @@ pub mod update {
         }
     }
 
-    pub fn download_latest_sde<P: AsRef<Path>>(file: P) -> Result<(), io::Error> {
+    pub fn download_latest_sde<P: AsRef<Path>>(file: P) -> Result<SdeVersion, io::Error> {
         reqwest::blocking::get(SDE_URL).map_err(io::Error::other)?
-            .copy_to(&mut File::create(file)?)
-            .map(|_| ()).map_err(io::Error::other)
+            .copy_to(&mut File::create(&file)?).map(|_| ()).map_err(io::Error::other)?;
+
+        SdeVersion::try_zip(file)
     }
 
-    pub fn update_sde<P: AsRef<Path>>(file: P) -> Result<(), io::Error> {
-        let SdeVersion::sde { buildNumber: current_version, .. } = SdeVersion::try_zip(&file)?;
+    pub fn update_sde<P: AsRef<Path>>(file: P) -> Result<SdeVersion, io::Error> {
+        let current @ SdeVersion::sde { buildNumber: current_version, .. } = SdeVersion::try_zip(&file)?;
         let SdeVersion::sde { buildNumber: latest, .. } = SdeVersion::download_latest()?;
         if current_version < latest {
             download_latest_sde(file)
         } else {
-            Ok(())
+            Ok(current)
         }
     }
 }
