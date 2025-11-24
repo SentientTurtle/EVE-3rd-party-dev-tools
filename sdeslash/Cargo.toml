@@ -1,0 +1,14 @@
+[package]
+name = "sderepack"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+tokio = { version = "1.48.0", features = ["net", "rt", "macros"] }
+axum = "0.8.7"
+zipslash = { path = "../zipslash" }
+evestaticdata = { path = "../EVE Files/DataLib" }
+
+[target.x86_64-unknown-linux-gnu.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
