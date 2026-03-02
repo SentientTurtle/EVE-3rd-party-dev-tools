@@ -18,12 +18,6 @@
   If set, appends to the specified logfile. If omitted, truncates log file. Requires `--logfile`.
 * `--silent`  
   Silent mode, implied by `checksum` output mode if no checksum file is specified.
-* `--data <SDE, FSD>`, `-d <SDE, FSD>`
-  Data source to use, SDE downloads the Static Data Export, FSD requires a *windows* python2 to be available.
-  NOTE: 'FSD' mode is an optional feature that must be enabled when compiling this program, and may not be available.
-* `--python2 <command>`
-  Command prefix for python2, required if using `FSD` data mode  
-  Warning: This *MUST* be a windows-compatible install as FSD loading requires running windows-binary python libraries. On linux, use of WINE or similar tools may work.
 * `--force_rebuild`, `-f`
   Force rebuilding of images, re-doing compositing of all icons. Recommended when updating the application to ensure any changes to compositing have been applied to cached icons.
 * `--skip_if_fresh`, `-s`
