@@ -93,6 +93,7 @@ fn do_main() -> Result<(), IconError> {
                         .long("out")
                         .required(true)
                         .help("Output file")
+                        .value_name("FILE")
                         .value_parser(ValueParser::path_buf())
                 ),
             Command::new("iec")
@@ -103,6 +104,7 @@ fn do_main() -> Result<(), IconError> {
                         .long("out")
                         .required(true)
                         .help("Output file")
+                        .value_name("FILE")
                         .value_parser(ValueParser::path_buf())
                 ),
             Command::new("web_dir")
@@ -113,10 +115,12 @@ fn do_main() -> Result<(), IconError> {
                         .long("out")
                         .required(true)
                         .help("Output directory")
+                        .value_name("OUTPUT DIRECTORY")
                         .value_parser(ValueParser::path_buf()),
                     Arg::new("copy_files")
                         .long("copy_files")
                         .help("Copy image files rather than creating symlinks")
+                        .conflicts_with("hardlink")
                         .action(ArgAction::SetTrue),
                     Arg::new("hardlink")
                         .long("hardlink")
@@ -131,6 +135,7 @@ fn do_main() -> Result<(), IconError> {
                         .short('o')
                         .long("out")
                         .help("Output file, if omitted, prints checksum to stdout")
+                        .value_name("FILE")
                         .value_parser(ValueParser::path_buf())
                 ),
             Command::new("aux_icons")
@@ -141,6 +146,7 @@ fn do_main() -> Result<(), IconError> {
                         .long("out")
                         .required(true)
                         .help("Output file")
+                        .value_name("FILE")
                         .value_parser(ValueParser::path_buf())
                 ),
             Command::new("aux_all")
@@ -151,15 +157,66 @@ fn do_main() -> Result<(), IconError> {
                         .long("out")
                         .required(true)
                         .help("Output file")
+                        .value_name("FILE")
                         .value_parser(ValueParser::path_buf())
                 ),
+            Command::new("multi")
+                .about("Perform multiple commands in a single run, see other commands for their details. At least one output option must be specified.")
+                .args([
+                    Arg::new("service_bundle")
+                        .long("service_bundle")
+                        .help("Output service bundle")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf()),
+                    Arg::new("iec")
+                        .long("iec")
+                        .help("Output Image Export Collection")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf()),
+                    Arg::new("web_dir")
+                        .long("web_dir")
+                        .help("Prepare a directory for web hosting")
+                        .value_name("OUTPUT DIRECTORY")
+                        .value_parser(ValueParser::path_buf()),
+                    Arg::new("copy_files")
+                        .long("copy_files")
+                        .help("(web_dir) Copy image files rather than creating symlinks")
+                        .conflicts_with("hard_links")
+                        .action(ArgAction::SetTrue),
+                    Arg::new("hardlink")
+                        .long("hardlink")
+                        .help("(web_dir) Use hard-links rather than soft-links")
+                        .conflicts_with("copy_files")
+                        .action(ArgAction::SetTrue),
+                    Arg::new("checksum_file")
+                        .long("checksum_file")
+                        .help("Write checksum to file")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf())
+                        .conflicts_with("checksum_stdout"),
+                    Arg::new("checksum_stdout")
+                        .long("checksum_stout")
+                        .help("Write checksum to stdout. Suppresses other stdout output")
+                        .conflicts_with("checksum_file"),
+                    Arg::new("aux_icons")
+                        .long("aux_icons")
+                        .help("Output Auxiliary Icon dump")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf()),
+                    Arg::new("aux_all")
+                        .long("aux_all")
+                        .help("Output Auxiliary All-Images dump")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf())
+                ])
+                .arg_required_else_help(true)
         ])
         .get_matches();
 
     let (command_name, command_args) = arg_matches.subcommand().expect("subcommand required");
     let output_mode = match command_name {
-        "service_bundle" => OutputMode::ServiceBundle { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
-        "iec" => OutputMode::IEC { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
+        "service_bundle" => vec![OutputMode::ServiceBundle { out: &command_args.get_one::<PathBuf>("out").expect("out is required") }],
+        "iec" => vec![OutputMode::IEC { out: &command_args.get_one::<PathBuf>("out").expect("out is required") }],
         "web_dir" => {
             let out = &command_args.get_one::<PathBuf>("out").expect("out is required");
             if !fs::exists(out)? {
@@ -167,20 +224,57 @@ fn do_main() -> Result<(), IconError> {
             } else if fs::metadata(out)?.is_file() {
                 Err(io::Error::other(format!("Output must be a directory! ({})", out.to_string_lossy())))?;
             }
-            OutputMode::Web {
+            vec![OutputMode::Web {
                 out,
                 copy_files: command_args.get_flag("copy_files"),
                 hard_link: command_args.get_flag("hardlink")
-            }
+            }]
         },
-        "checksum" => OutputMode::Checksum { out: command_args.get_one::<PathBuf>("out").map(PathBuf::as_path) },
-        "aux_icon" => OutputMode::AuxIcons { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
-        "aux_all" => OutputMode::AuxImages { out: &command_args.get_one::<PathBuf>("out").expect("out is required") },
+        "checksum" => { vec![OutputMode::Checksum { out: command_args.get_one::<PathBuf>("out").map(PathBuf::as_path) }] },
+        "aux_icon" => vec![OutputMode::AuxIcons { out: &command_args.get_one::<PathBuf>("out").expect("out is required") }],
+        "aux_all" => vec![OutputMode::AuxImages { out: &command_args.get_one::<PathBuf>("out").expect("out is required") }],
+        "multi" => {
+            let mut output_modes = Vec::with_capacity(6);
+
+            if let Some(out) = command_args.get_one::<PathBuf>("service_bundle") {
+                output_modes.push(OutputMode::ServiceBundle { out })
+            }
+
+            if let Some(out) = command_args.get_one::<PathBuf>("iec") {
+                output_modes.push(OutputMode::IEC { out })
+            }
+
+            if let Some(out) = command_args.get_one::<PathBuf>("web_dir") {
+                output_modes.push(OutputMode::Web {
+                    out,
+                    copy_files: command_args.get_flag("copy_files"),
+                    hard_link: command_args.get_flag("hardlink")
+                })
+            }
+
+            if let Some(out) = command_args.get_one::<PathBuf>("checksum_file") {
+                assert!(!command_args.contains_id("checksum_stdout"), "checksum_file conflicts with checksum_stdout");
+                output_modes.push(OutputMode::Checksum { out: Some(out) })
+            }
+
+            if command_args.contains_id("checksum_stdout") {
+                assert!(!command_args.contains_id("checksum_file"), "checksum_stdout conflicts with checksum_file");
+                output_modes.push(OutputMode::Checksum { out: None })
+            }
+
+            if let Some(out) = command_args.get_one::<PathBuf>("aux_icons") {
+                output_modes.push(OutputMode::AuxIcons { out })
+            }
+
+            if let Some(out) = command_args.get_one::<PathBuf>("aux_all") {
+                output_modes.push(OutputMode::AuxImages { out })
+            }
+
+            assert!(output_modes.len() > 0, "At least one output mode when using `multi` command is required"); // This should be enforced by clap, so a simple panic is sufficient.
+            output_modes
+        }
         _ => panic!("Unknown subcommand: {}", command_name)
     };
-
-    let silent_mode = arg_matches.get_flag("silent") || matches!(output_mode, OutputMode::Checksum { out: None });
-    let skip_if_fresh = arg_matches.get_flag("skip_if_fresh") && !matches!(output_mode, OutputMode::Checksum { out: None });
 
     if let Some(log_path) = arg_matches.get_one::<PathBuf>("logfile") {
         let mut opts = File::options();
@@ -193,9 +287,12 @@ fn do_main() -> Result<(), IconError> {
         LOG_FILE.set(opts.open(log_path)?).expect("Log file is set only once!");
     }
     let log_file = LOG_FILE.get();
-    if let Some(mut log) = log_file { writeln!(log, "Icon generation run, output: {:?} - {}", &output_mode, chrono::Local::now())?; }
+    if let Some(mut log) = log_file { writeln!(log, "Icon generation run - {}", chrono::Local::now())?; }
 
     let user_agent = arg_matches.get_one::<String>("user_agent").expect("user_agent is a required argument");
+
+    let silent_mode = arg_matches.get_flag("silent"); // icons::build_icon_export overrides this to `true` if "checksum to stdout" is present
+    let skip_if_fresh = arg_matches.get_flag("skip_if_fresh");
 
     let start = Instant::now();
     if !silent_mode { println!("Initializing cache (UA:`{}`)", user_agent); }

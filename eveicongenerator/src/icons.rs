@@ -1,5 +1,5 @@
 use evesharedcache::cache::{CacheError, SharedCache};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
@@ -199,7 +199,7 @@ fn copy_or_convert(from: impl AsRef<Path>, to: impl AsRef<Path>, resource: &str,
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Serialize)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
 enum IconKind {
     #[serde(rename="icon")]
     Icon,
@@ -228,6 +228,12 @@ impl IconKind {
     }
 }
 
+impl Display for IconKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        <str as Display>::fmt(self.name(), f)
+    }
+}
+
 #[derive(Debug)]
 pub enum OutputMode<'a> {
     ServiceBundle { out: &'a Path },
@@ -238,8 +244,9 @@ pub enum OutputMode<'a> {
     AuxImages { out: &'a Path }
 }
 
-pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool, silent_mode: bool) -> Result<(usize, usize), IconError> {
-    let log_file = crate::LOG_FILE.get();
+pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_modes: Vec<OutputMode>, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool, mut silent_mode: bool) -> Result<(usize, usize), IconError> {
+    let log_file = crate::LOG_FILE.get();   // TODO: Put in a parameter
+    silent_mode |= output_modes.iter().any(|mode| matches!(mode, OutputMode::Checksum { out: None }));  // If "Checksum to stdout" output mode is present, enforce silent mode
 
     let icon_dir = icon_dir.as_ref();
     fs::create_dir_all(icon_dir)?;
@@ -256,7 +263,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
         };
     }
 
-    let mut service_metadata = HashMap::<u32, HashMap<IconKind, String>>::new();
+    let mut service_metadata = BTreeMap::<u32, BTreeMap<IconKind, String>>::new();
     let mut new_index = HashSet::<String>::new();
 
     fn is_up_to_date(old_index: &HashSet<String>, new_index: &mut HashSet<String>, filename: &str, force_rebuild: bool) -> bool {
@@ -463,22 +470,39 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
     let to_remove = old_index.iter().filter(|key| !new_index.contains(*key)).map(String::as_str).collect::<Vec<&str>>();
     let to_add = new_index.iter().filter(|key| !old_index.contains(*key)).map(String::as_str).collect::<Vec<&str>>();
 
-    if to_add.len() == 0 && to_remove.len() == 0 && skip_output_if_fresh {
+    let skip_output = to_add.len() == 0 && to_remove.len() == 0 && skip_output_if_fresh;
+    if skip_output {
         if !silent_mode { println!("Icons fresh, skipping output..."); }
         if let Some(mut log) = log_file { writeln!(log, "Icons fresh, skipping output...")?; }
     } else {
         if !silent_mode { println!("Icons built, generating output..."); }
         if let Some(mut log) = log_file { writeln!(log, "Icons built, generating output...")?; }
+    }
+
+    for output_mode in output_modes {
         match output_mode {
-            OutputMode::ServiceBundle { out} => {
-                if let Some(mut log) = log_file { writeln!(log, "Writing Service Bundle to {:?}", out)?; }
+            OutputMode::ServiceBundle { out } => {
+                if skip_output {
+                    if !silent_mode { println!("\tSKIPPED Service Bundle"); }
+                    if let Some(mut log) = log_file { writeln!(log, "\tSKIPPED Service Bundle")?; }
+                    continue;
+                }
+
+                if !silent_mode { println!("\tWriting Service Bundle to {:?}", out); }
+                if let Some(mut log) = log_file { writeln!(log, "\tWriting Service Bundle to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
-                for filename in &new_index {
-                    if let Some(mut log) = log_file { writeln!(log, "\t{}", filename)?; }
-                    writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored))
-                        .map_err(|e| format!("err in {}: {}", filename, e))
-                        .map_err(io::Error::other)?;
-                    io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
+
+                let mut written = HashSet::new();
+                for (type_id, metadata) in &service_metadata {
+                    for (icon_kind, filename) in metadata {
+                        if let Some(mut log) = log_file { writeln!(log, "\t\tType {} ({}) - {}", type_id, icon_kind, filename)?; }
+                        if written.insert(filename) {
+                            writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored))
+                                .map_err(|e| format!("err in {}: {}", filename, e))
+                                .map_err(io::Error::other)?;
+                            io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
+                        }
+                    }
                 }
 
                 writer.start_file("service_metadata.json", FileOptions::<()>::default()).map_err(io::Error::other)?;
@@ -487,7 +511,14 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 writer.finish().map_err(io::Error::other)?.flush()?;
             }
             OutputMode::IEC { out } => {
-                if let Some(mut log) = log_file { writeln!(log, "Writing IEC archive to {:?}", out)?; }
+                if skip_output {
+                    if !silent_mode { println!("\tSKIPPED IEC archive"); }
+                    if let Some(mut log) = log_file { writeln!(log, "\tSKIPPED IEC archive")?; }
+                    continue;
+                }
+
+                if !silent_mode { println!("\tWriting IEC archive to {:?}", out); }
+                if let Some(mut log) = log_file { writeln!(log, "\tWriting IEC archive to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
                 // Copy the icons IEC-style; Types with the same icon get duplicated files
                 for (type_id, icons) in &service_metadata {
@@ -495,20 +526,20 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                         match icon_kind {
                             IconKind::Icon => {
                                 let output_name = format!("{}_64.png", type_id);
-                                if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
+                                if let Some(mut log) = log_file { writeln!(log, "\t\tType {} ({}) - {} [{}]", type_id, icon_kind, output_name, filename)?; }
                                 writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
-                            IconKind::Blueprint | IconKind::Reaction | IconKind::Relic => { /* None, these are duplicated by IconKind::Icon */}
+                            IconKind::Blueprint | IconKind::Reaction | IconKind::Relic => { /* None, these are duplicated by IconKind::Icon */ }
                             IconKind::BlueprintCopy => {
                                 let output_name = format!("{}_bpc_64.png", type_id);
-                                if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
+                                if let Some(mut log) = log_file { writeln!(log, "\t\tType {} ({}) - {} [{}]", type_id, icon_kind, output_name, filename)?; }
                                 writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
                             IconKind::Render => {
                                 let output_name = format!("{}_512.jpg", type_id);
-                                if let Some(mut log) = log_file { writeln!(log, "\t{} as {}", filename, output_name)?; }
+                                if let Some(mut log) = log_file { writeln!(log, "\t\tType {} ({}) - {} [{}]", type_id, icon_kind, output_name, filename)?; }
                                 writer.start_file(&output_name, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                                 io::copy(&mut File::open(icon_dir.join(filename))?, &mut writer)?;
                             }
@@ -518,13 +549,20 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 writer.finish().map_err(io::Error::other)?.flush()?;
             }
             OutputMode::Web { out, copy_files, hard_link } => {
+                if skip_output {
+                    if !silent_mode { println!("\tSKIPPED building web folder"); }
+                    if let Some(mut log) = log_file { writeln!(log, "\tSKIPPED building web folder")?; }
+                    continue;
+                }
+
                 let mode_name = if copy_files { "COPYING" } else if hard_link { "HARD LINK" } else { "SOFT LINK" };
-                if let Some(mut log) = log_file { writeln!(log, "Building web folder to {:?} ({})", out, mode_name)?; }
+                if !silent_mode { println!("\tBuilding web folder to {:?} ({})", out, mode_name); }
+                if let Some(mut log) = log_file { writeln!(log, "\tBuilding web folder to {:?} ({})", out, mode_name)?; }
                 let mut created_files = HashMap::<String, String>::new();
 
                 let index_path = out.join("index.json");
                 let old_links = if fs::exists(&index_path)? {
-                     serde_json::from_reader::<_, HashMap<String, String>>(File::open(&index_path)?).map_err(io::Error::other)?
+                    serde_json::from_reader::<_, HashMap<String, String>>(File::open(&index_path)?).map_err(io::Error::other)?
                 } else {
                     HashMap::new()
                 };
@@ -547,7 +585,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                         let link_file = std::path::absolute(out.join(&link_name))?;
 
                         if force_rebuild || old_links.get(&link_name) != Some(&filename) {
-                            if let Some(mut log) = log_file { writeln!(log, "\t{} -> {}", &filename, &link_name)?; }
+                            if let Some(mut log) = log_file { writeln!(log, "\t\t{} -> {}", &filename, &link_name)?; }
                             if copy_files {
                                 fs::copy(link_source, link_file)?;
                             } else if hard_link {
@@ -563,7 +601,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                                 compile_error!("Can't create symlink on OS that is neither windows nor unix :(")
                             }
                         } else {
-                            if let Some(mut log) = log_file { writeln!(log, "\tSKIP: {}", &link_name)?; }
+                            if let Some(mut log) = log_file { writeln!(log, "\t\tSKIP: {}", &link_name)?; }
                         }
                         created_files.insert(link_name, filename.clone());
                     }
@@ -571,7 +609,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
 
                 for entry in old_links.keys() {
                     if !created_files.contains_key(entry) {
-                        if let Some(mut log) = log_file { writeln!(log, "\tRemoved: {}", &entry)?; }
+                        if let Some(mut log) = log_file { writeln!(log, "\t\tRemoved: {}", &entry)?; }
                         match fs::remove_file(out.join(entry)) {
                             Ok(()) => Ok(()),
                             Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
@@ -582,25 +620,36 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 serde_json::to_writer(File::create(&index_path)?, &created_files).map_err(io::Error::other)?;
             }
             OutputMode::Checksum { out } => {
+                // Checksum is never skipped
+
                 let checksum = md5::compute(&index_bytes);
                 if let Some(mut log) = log_file { writeln!(log, "Checksum:{:x}", checksum)?; }
                 if let Some(outfile) = out {
+                    if !silent_mode { println!("\tWriting checksum to {:?}", outfile); }
                     fs::write(outfile, format!("{:x}", checksum))?
                 } else {
+                    assert!(silent_mode);
                     print!("{:x}", md5::compute(&index_bytes))
                 }
             },
             // Auxiliary outputs don't use the icon cache, but updating/checking it is quite fast so these outputs don't skip it
             OutputMode::AuxIcons { out } => {
-                if let Some(mut log) = log_file { writeln!(log, "Writing Auxiliary Icon dump archive to {:?}", out)?; }
+                if skip_output {
+                    if !silent_mode { println!("\tSKIPPED Auxiliary Icon dump archive"); }
+                    if let Some(mut log) = log_file { writeln!(log, "\tSKIPPED Auxiliary Icon dump archive")?; }
+                    continue;
+                }
+
+                if !silent_mode { println!("\tWriting Auxiliary Icon dump archive to {:?}", out); }
+                if let Some(mut log) = log_file { writeln!(log, "\tWriting Auxiliary Icon dump archive to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
                 for (icon_id, resource) in &data.icon_files {
                     let (_path, extension) = resource.rsplit_once('.')
                         .or_else(|| resource.rsplit_once('/'))
                         .unwrap_or(("", resource));
 
-                    if let Some(mut log) = log_file { writeln!(log, "\t{}: {}", icon_id, resource)?; }
-                    
+                    if let Some(mut log) = log_file { writeln!(log, "\t\t{}: {}", icon_id, resource)?; }
+
                     let resource_path = cache.path_of(resource)?;
                     writer.start_file(format!("{}.{}", icon_id, extension), FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                     std::io::copy(&mut File::open(resource_path)?, &mut writer)?;
@@ -608,13 +657,20 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_mode: OutputMode
                 writer.finish().map_err(io::Error::other)?.flush()?;
             }
             OutputMode::AuxImages { out } => {
-                if let Some(mut log) = log_file { writeln!(log, "Writing Auxiliary All-Images dump archive to {:?}", out)?; }
+                if skip_output {
+                    if !silent_mode { println!("\tSKIPPED Auxiliary All-Images dump archive"); }
+                    if let Some(mut log) = log_file { writeln!(log, "\tSKIPPED Auxiliary All-Images dump archive")?; }
+                    continue;
+                }
+
+                if !silent_mode { println!("\tWriting Auxiliary All-Images dump archive to {:?}", out); }
+                if let Some(mut log) = log_file { writeln!(log, "\tWriting Auxiliary All-Images dump archive to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
                 for resource in cache.iter_resources().filter(|resource| resource.ends_with("png") || resource.ends_with("jpg")) {
                     let (_resource_kind, filename) = resource.split_once(":/").unwrap_or(("", resource));
                     let resource_path = cache.path_of(resource)?;
-                    
-                    if let Some(mut log) = log_file { writeln!(log, "\t{}", resource)?; }
+
+                    if let Some(mut log) = log_file { writeln!(log, "\t\t{}", resource)?; }
 
                     writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                     std::io::copy(&mut File::open(resource_path)?, &mut writer)?;
