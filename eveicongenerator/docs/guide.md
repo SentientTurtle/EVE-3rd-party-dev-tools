@@ -5,7 +5,7 @@
   User agent for HTTP requests
 * `--cache_folder <directory>`, `-c <directory>` (default: `./cache`)  
   Folder for game file cache.  
-  WARNING: All other files in this folder will be deleted during cleanup  
+  WARNING: All other (unrelated) files in this folder will be deleted during clean-up.  
   This folder should persist between runs to avoid re-downloading files from CCP servers.
 * `--icon_folder <directory>`, `-i <directory>` (default: `./icons`)  
   Folder for storing built icons.
@@ -49,3 +49,15 @@ Output mode subcommands:
 * `aux_all`
   Auxiliary all-image export, builds .zip archive with all images in the game cache.
   * `--out <file>` Output file for zip archive, required.
+  * `--incl-character` Include character model texture images. This adds several gigabytes of data to the export AND cache folder. (~1GB -> ~6GB, 2x totalling ~12GB of storage needed)
+* `multi`
+  Multi-output mode. Updates image data once, then generates multiple outputs with that version.  
+  If checksum-to-stdout is chosen, silent mode is enabled for all outputs and only a checksum will be emitted to stdout upon completion of all outputs.
+  * `--service_bundle <file>` Enable service bundle output.
+  * `--iec <file>` Enable 'Image Export Collection' output.
+  * `--web_dir <directory>` Enable web directory output, allows additional options for config.
+    * `--copy_files` Copies files rather than using symlinks.
+    * `--hardlink` Use hard links rather than using soft links.
+  * `--aux_icons <file>` Enable Auxiliary Icon output.
+  * `--aux_all <file>` Enable Auxiliary all-image output.
+    * `--incl-character` Include character model texture images. This adds several gigabytes of data to the export AND cache folder. (~1GB -> ~6GB, 2x totalling ~12GB of storage needed)

@@ -241,7 +241,7 @@ pub enum OutputMode<'a> {
     Web { out: &'a Path, copy_files: bool, hard_link: bool },
     Checksum { out: Option<&'a Path> },
     AuxIcons { out: &'a Path },
-    AuxImages { out: &'a Path }
+    AuxImages { out: &'a Path, incl_character: bool }
 }
 
 pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_modes: Vec<OutputMode>, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, use_magick: bool, mut silent_mode: bool) -> Result<(usize, usize), IconError> {
@@ -648,6 +648,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_modes: Vec<Outpu
                         .or_else(|| resource.rsplit_once('/'))
                         .unwrap_or(("", resource));
 
+                    if !silent_mode { println!("\t\t{}: {}", icon_id, resource); };
                     if let Some(mut log) = log_file { writeln!(log, "\t\t{}: {}", icon_id, resource)?; }
 
                     let resource_path = cache.path_of(resource)?;
@@ -656,7 +657,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_modes: Vec<Outpu
                 }
                 writer.finish().map_err(io::Error::other)?.flush()?;
             }
-            OutputMode::AuxImages { out } => {
+            OutputMode::AuxImages { out, incl_character } => {
                 if skip_output {
                     if !silent_mode { println!("\tSKIPPED Auxiliary All-Images dump archive"); }
                     if let Some(mut log) = log_file { writeln!(log, "\tSKIPPED Auxiliary All-Images dump archive")?; }
@@ -666,11 +667,16 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(output_modes: Vec<Outpu
                 if !silent_mode { println!("\tWriting Auxiliary All-Images dump archive to {:?}", out); }
                 if let Some(mut log) = log_file { writeln!(log, "\tWriting Auxiliary All-Images dump archive to {:?}", out)?; }
                 let mut writer = ZipWriter::new(File::create(out)?);
-                for resource in cache.iter_resources().filter(|resource| resource.ends_with("png") || resource.ends_with("jpg")) {
+
+                let resource_valid = |resource: &&str| (resource.ends_with("png") || resource.ends_with("jpg")) && (incl_character || !resource.starts_with("res:/graphics/character/"));
+
+                let res_count = cache.iter_resources().filter(resource_valid).count();
+                for (n, resource) in cache.iter_resources().filter(resource_valid).enumerate() {
                     let (_resource_kind, filename) = resource.split_once(":/").unwrap_or(("", resource));
                     let resource_path = cache.path_of(resource)?;
 
-                    if let Some(mut log) = log_file { writeln!(log, "\t\t{}", resource)?; }
+                    if !silent_mode { println!("\t\t[{}/{}] {}", n, res_count, resource); }
+                    if let Some(mut log) = log_file { writeln!(log, "\t\t[{}/{}] {}", n, res_count, resource)?; }
 
                     writer.start_file(filename, FileOptions::<()>::default().compression_method(CompressionMethod::Stored)).map_err(io::Error::other)?;
                     std::io::copy(&mut File::open(resource_path)?, &mut writer)?;
