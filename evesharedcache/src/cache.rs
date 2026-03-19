@@ -3,10 +3,12 @@ use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Keys;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::io::Read;
+use std::fs::File;
+use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use md5::{Digest, Md5};
 use serde::Deserialize;
 
 #[derive(Debug)]
@@ -305,25 +307,18 @@ impl CacheDownloader {
         if fs::exists(&file)? {
             Ok(None)
         } else {
-            let mut response = self.http_client.get(url)
+            let response = self.http_client.get(url)
                 .send()?
                 .error_for_status()?;
 
-            let mut buffer = if let Some(content_length) = response.content_length() {
-                Vec::with_capacity(content_length as usize)
-            } else {
-                Vec::new()
-            };
-
-            response.read_to_end(&mut buffer)?;
+            let buffer = response.bytes()?;
 
             if let Some(parent) = file.parent() {
                 fs::create_dir_all(parent)?;
             }
+            fs::write(file, &buffer)?;
 
-            fs::write(file, &*buffer)?;
-
-            Ok(Some(buffer))
+            Ok(Some(buffer.to_vec()))
         }
     }
 
@@ -348,8 +343,8 @@ impl CacheDownloader {
     /// returns: Result<u64, CacheError>
     pub fn preload(&self, max_items: u64, sleep: Option<Duration>) -> Result<u64, CacheError> {
         let mut downloaded = 0;
-        for  IndexEntry { path, .. } in self.res_index.values().chain(self.app_index.values()) {
-            if self.ensure_cached(self.cache_dir.join(path), format!("https://binaries.eveonline.com/{}", path))?.is_some() { downloaded += 1 };
+        for  IndexEntry { path, .. } in self.res_index.values() {
+            if self.ensure_cached(self.cache_dir.join(path), format!("https://resources.eveonline.com/{}", path))?.is_some() { downloaded += 1 };
             if downloaded >= max_items {
                 break;
             }
@@ -359,6 +354,47 @@ impl CacheDownloader {
             }
         }
         Ok(downloaded)
+    }
+
+    pub fn validate(&self) -> Result<(usize, usize), CacheError> {
+        let mut valid = 0usize;
+        let mut invalid = 0usize;
+
+        let start = Instant::now();
+        let path_map = self.res_index.values().chain(self.app_index.values()).map(|entry| (entry.path.as_str(), entry)).collect::<HashMap<&str, &IndexEntry>>();
+
+        for dir in self.cache_dir.read_dir()? {
+            let dir = dir?;
+            if dir.metadata()?.is_dir() {
+                for file in dir.path().read_dir()? {
+                    let file = file?;
+                    if file.metadata()?.is_file() {
+                        let path = file.path();
+
+                        let resource_path = path.strip_prefix(&self.cache_dir)
+                            .unwrap_or(&path)
+                            .to_string_lossy()
+                            .replace('\\', "/");
+
+                        if let Some(index_entry) = path_map.get(&*resource_path) {
+                            let mut md5 = Md5::new();
+
+                            std::io::copy(&mut BufReader::new(File::open(&path)?), &mut md5)?;
+
+                            if u128::from_be_bytes(md5.finalize().into()) == u128::from_str_radix(&*index_entry.md5, 16).map_err(|_| CacheError::MalformedIndexFile)? {
+                                valid += 1;
+                            } else {
+                                invalid += 1;
+                                fs::remove_file(path)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        println!("loop: {}", start.elapsed().as_secs_f64());
+
+        Ok((valid, invalid))
     }
 
     /// Remove local directory files not in the current sharedcache index
