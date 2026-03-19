@@ -6,21 +6,23 @@ publish = false
 repository = "https://github.com/SentientTurtle/EVE-3rd-party-dev-tools"
 
 [features]
-default = ["update", "load", "serde"]
-update = ["dep:reqwest", "reqwest/json", "dep:serde", "dep:serde_json"]
-load = ["dep:zip", "dep:serde"]
+default = ["load", "update", "esi_async", "serde"]
+update = ["dep:reqwest", "reqwest/json", "reqwest/blocking", "dep:serde", "dep:serde_json"]
+load = ["dep:zip", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "dep:serde_repr", "indexmap/serde"]
+esi_async = ["dep:tokio", "dep:reqwest"]
 
 [profile.test]
 inherits = "release"
 
 [dependencies]
-indexmap = { version = "2.11.4" }
+indexmap = { version = "2.13.0" }
 # Used for 'update' feature
-reqwest = { version = "0.12.23", features = ["blocking"], optional = true }
+reqwest = { version = "0.13.1", optional = true, features = ["native-tls"] }
 # Used for SDE parsing
-zip = { version = "5.1.1", optional = true }
+zip = { version = "7.2.0", optional = true }
 serde_repr = { version = "0.1.20", optional = true }
 # Used for 'serde' feature
 serde = { version = "1.0.228", features = ["derive"], optional = true }
-serde_json = { version = "1.0.145", optional = true }
+serde_json = { version = "1.0.149", optional = true }
+tokio = { version = "1.49.0", features = ["net", "time", "rt"], optional = true }

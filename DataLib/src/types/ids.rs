@@ -38,6 +38,9 @@ pub type CharacterAttributeID = u32;
 pub type CertificateID = u32;
 pub type CorporationActivityID = u32;
 pub type PlanetSchematicID = u32;
+pub type CloneGradeID = u32;
+pub type JobSchemaID = u32;
+pub type MercOperationID = u32;
 
 
 // ItemIDs

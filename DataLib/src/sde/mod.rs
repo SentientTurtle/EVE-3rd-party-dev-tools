@@ -229,34 +229,7 @@ pub mod load {
         }
     }
 
-    // SDE Entry types
-
-    /// Agent (Mission NPC) that is located in space, rather than docked in a station
-    ///
-    /// Additional Agent information is contained in [`NpcCharacter`] data
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    #[serde(deny_unknown_fields)]
-    pub struct AgentInSpace {
-        /// CharacterID for this agent
-        #[serde(rename="_key")]
-        pub agentID: ids::CharacterID,
-        /// 'Dungeon' within which the agent is located
-        ///
-        /// Data about dungeons is not available for EVE 3rd party developers
-        pub dungeonID: ids::DungeonID,
-        /// SolarSystem in which the Agent is located
-        pub solarSystemID: ids::SolarSystemID,
-        /// Spawnpoint for agent, no data available for EVE 3rd party developers
-        pub spawnPointID: ids::SpawnPointID,
-        /// TypeID of the agent's ship (Note: Agent Ships are not the same as the player-flyable ship, and have different TypeIDs)
-        pub typeID: ids::TypeID
-    }
-
-    pub fn load_agents_in_space<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CharacterID, AgentInSpace), SDELoadError>>, SDELoadError> {
-        load_file::<AgentInSpace, R>(archive, "agentsInSpace.jsonl")
-            .map(|iter| iter.map(|res| res.map(|entry| (entry.agentID, entry))))
-    }
+    // SDE data types
 
     /// The different kinds of agent
     ///
@@ -293,6 +266,33 @@ pub mod load {
             .map(|iter| iter.map(|res| res.map(|entry| (entry.agentTypeID, entry.name))))
     }
 
+    /// Agent (Mission NPC) that is located in space, rather than docked in a station
+    ///
+    /// Additional Agent information is contained in [`NpcCharacter`] data
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct AgentInSpace {
+        /// CharacterID for this agent
+        #[serde(rename="_key")]
+        pub agentID: ids::CharacterID,
+        /// 'Dungeon' within which the agent is located
+        ///
+        /// Data about dungeons is not available for EVE 3rd party developers
+        pub dungeonID: ids::DungeonID,
+        /// SolarSystem in which the Agent is located
+        pub solarSystemID: ids::SolarSystemID,
+        /// Spawnpoint for agent, no data available for EVE 3rd party developers
+        pub spawnPointID: ids::SpawnPointID,
+        /// TypeID of the agent's ship (Note: Agent Ships are not the same as the player-flyable ship, and have different TypeIDs)
+        pub typeID: ids::TypeID
+    }
+
+    pub fn load_agents_in_space<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CharacterID, AgentInSpace), SDELoadError>>, SDELoadError> {
+        load_file::<AgentInSpace, R>(archive, "agentsInSpace.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.agentID, entry))))
+    }
+
     /// Character Ancestry; Now-unused character creation element (Removed from player character creation 2021-03-02)
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
@@ -315,7 +315,7 @@ pub mod load {
         pub willpower: i32,
         /// Ancestry description as (previously) displayed in game client
         pub description: LocalizedString,
-        /// Icon, if specified
+        /// Icon, optional
         pub iconID: Option<ids::IconID>,
         /// Ancestry name
         pub name: LocalizedString,
@@ -340,7 +340,7 @@ pub mod load {
         pub corporationID: ids::CorporationID,
         /// Bloodline description, as shown in game client
         pub description: LocalizedString,
-        /// Icon, if specified
+        /// Icon, optional
         pub iconID: Option<ids::IconID>,
         /// Bloodline name
         pub name: LocalizedString,
@@ -493,7 +493,7 @@ pub mod load {
             type Value = IndexMap<ids::TypeID, numbers::SkillLevel>;
 
             fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-                formatter.write_str("array of blueprint products (typeID, quantity & probability)")
+                formatter.write_str("array of blueprint skills (typeID & level)")
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
@@ -527,7 +527,7 @@ pub mod load {
         pub name: LocalizedString,
         /// 'Published' status; If false, not visible to players in the game client
         pub published: bool,
-        /// Icon, if specified
+        /// Icon, optional
         pub iconID: Option<ids::IconID>
     }
 
@@ -612,6 +612,73 @@ pub mod load {
         load_file::<CharacterAttribute, R>(archive, "characterAttributes.jsonl")
             .map(|iter| iter.map(|res| res.map(|entry| (entry.characterAttributeID, entry))))
     }
+
+    /// Information about Alpha clones
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct CloneGrade {
+        /// ID for this clone grade
+        #[serde(rename="_key")]
+        pub cloneGradeID: ids::CloneGradeID,
+        /// Name (Not displayed in-game)
+        pub name: String,
+        #[serde(deserialize_with="deserialize_clonegrade_skills")]
+        pub skills: IndexMap<ids::TypeID, numbers::SkillLevel>
+    }
+    fn deserialize_clonegrade_skills<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, numbers::SkillLevel>, D::Error> {
+        #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
+        pub struct CloneSkill {
+            typeID: ids::TypeID,
+            level: numbers::SkillLevel,
+        }
+
+        pub struct SkillVisitor;
+        impl<'de> Visitor<'de> for SkillVisitor {
+            type Value = IndexMap<ids::TypeID, numbers::SkillLevel>;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("array of clonegrade skills (typeID & level)")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error> where A: SeqAccess<'de> {
+                let size_hint = seq.size_hint();
+                let mut map = size_hint.map(IndexMap::with_capacity).unwrap_or_else(IndexMap::new);
+                while let Some(value) = seq.next_element::<CloneSkill>()? {
+                    map.insert(value.typeID, value.level);
+                }
+                Ok(map)
+            }
+        }
+
+        deserializer.deserialize_seq(SkillVisitor)
+    }
+
+    pub fn load_clone_grades<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::CloneGradeID, CloneGrade), SDELoadError>>, SDELoadError> {
+        load_file::<CloneGrade, R>(archive, "cloneGrades.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.cloneGradeID, entry))))
+    }
+
+    // No datatype for CompressibleTypes; Directly folded into a typeid-typeid map
+
+    /// Load compressible ores
+    pub fn load_compressible_types<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, ids::TypeID), SDELoadError>>, SDELoadError> {
+        #[derive(Debug, Deserialize)]
+        #[allow(non_snake_case)]
+        #[serde(deny_unknown_fields)]
+        pub struct CompressibleOre {
+            /// Ore typeID
+            #[serde(rename="_key")]
+            pub typeID: ids::TypeID,
+            /// Compressed ore (output) typeID
+            pub compressedTypeID: ids::TypeID
+        }
+
+        load_file::<CompressibleOre, R>(archive, "compressibleTypes.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.typeID, entry.compressedTypeID))))
+    }
+
     /// Contraband status information for a [`Type`]
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
@@ -820,12 +887,14 @@ pub mod load {
     }
 
     /// Dogma operation for warfare buff
+    ///
+    /// Subject to change
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
     pub enum WarfareBuffOperation {
         // Dogma is weird and complicated, so no individual docs on these
-        PostMul, PostPercent, ModAdd, PostAssignment
+        PostMul, PostPercent, ModAdd, PreAssignment, PostAssignment
     }
 
     /// Warfare buff display mode
@@ -1070,6 +1139,156 @@ pub mod load {
     pub fn load_factions<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::FactionID, Faction), SDELoadError>>, SDELoadError> {
         load_file::<Faction, R>(archive, "factions.jsonl")
             .map(|iter| iter.map(|res| res.map(|entry| (entry.factionID, entry))))
+    }
+
+    #[derive(Debug, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
+    pub enum JobType {
+        BoostShield,
+        CaptureFWComplex,
+        DamageShip,
+        DefendFWComplex,
+        DeliverItem,
+        KillCapsuleer,
+        KillNPC,
+        MineOre,
+        RepairArmor,
+        ShipInsurance
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct ContributionMultiplier {
+        pub title: LocalizedString,
+        pub description: LocalizedString,
+        pub unsetDescription: LocalizedString,
+        pub iconID: String,
+        pub defaultValue: f64, // ???
+        pub maxValue: f64,  // ???
+        pub minValue: f64,  // ???
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct ContributionInfo {
+        pub title: LocalizedString,
+        pub description: LocalizedString,
+        pub unsetDescription: LocalizedString,
+        pub iconID: String
+    }
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameterBooleanOption {
+        pub title: LocalizedString,
+        pub description: LocalizedString,
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameterBoolean {
+        pub choiceLabel: LocalizedString,
+        pub default: bool,
+        pub description: LocalizedString,
+        pub iconID: String,
+        pub optionFalse: JobSchemaParameterBooleanOption,
+        pub optionTrue: JobSchemaParameterBooleanOption,
+        pub title: LocalizedString
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameterItemDeliveryLocation {
+        pub acceptedValueTypes: Vec<String>,    // TODO: Turn into enumset?
+        pub description: LocalizedString,
+        pub iconID: String,
+        pub maxEntries: f64,
+        pub title: LocalizedString,
+        pub unsetDescription: LocalizedString
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameterItemDeliveryInventoryType {
+        pub acceptedValueTypes: Vec<String>,    // TODO: Turn into enumset?
+        pub description: LocalizedString,
+        pub iconID: String,
+        pub title: LocalizedString,
+        pub unsetDescription: LocalizedString
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameterItemDelivery {
+        pub deliveryLocation: JobSchemaParameterItemDeliveryLocation,
+        pub description: LocalizedString,
+        pub iconID: String,
+        pub inventoryType: JobSchemaParameterItemDeliveryInventoryType,
+        pub title: LocalizedString
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameterMatcher {
+        pub acceptedValueTypes: Vec<String>,    // TODO: Turn into enumset?
+        pub description: LocalizedString,
+        pub iconID: String,
+        pub maxEntries: f64,
+        pub optional: bool,
+        pub title: LocalizedString,
+        #[serde(rename="type")]
+        pub matcher_type: String,
+        pub unsetDescription: LocalizedString
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct JobSchemaParameter {
+        #[serde(rename="_key")]
+        pub parameter_type: String,
+        pub boolean: Option<JobSchemaParameterBoolean>,
+        pub itemDelivery: Option<JobSchemaParameterItemDelivery>,
+        pub matcher: Option<JobSchemaParameterMatcher>,
+    }
+
+    impl InlineEntry<String> for JobSchemaParameter {
+        fn key(&self) -> String {
+            self.parameter_type.clone()
+        }
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct FreelanceJobSchema {
+        #[serde(rename="_key")]
+        pub job_type: JobType,
+        pub contentTags: Vec<String>,
+        pub contributionMultiplier: Option<ContributionMultiplier>,
+        pub description: LocalizedString,
+        pub progressDescription: LocalizedString,
+        pub rewardDescription: LocalizedString,
+        pub targetDescription: LocalizedString,
+        pub title: LocalizedString,
+        pub iconID: String,
+        pub maxContributionsPerParticipant: ContributionInfo,
+        pub maxProgressPerContribution: Option<ContributionInfo>,
+        #[serde(deserialize_with="deserialize_inline_entry_map")]
+        pub parameters: IndexMap<String, JobSchemaParameter>
+    }
+
+    pub fn load_freelance_job_schemas<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::JobSchemaID, Vec<FreelanceJobSchema>), SDELoadError>>, SDELoadError> {
+        load_file::<ExplicitMapEntry<u32, Vec<FreelanceJobSchema>>, R>(archive, "freelanceJobSchemas.jsonl")
+            .map(|iter| {
+                iter.map(|res| res.map(|entry| (entry._key, entry._value)))
+            })
     }
 
     #[derive(Debug, Deserialize)]
@@ -1338,6 +1557,23 @@ pub mod load {
     #[derive(Debug, Deserialize)]
     #[allow(non_snake_case)]
     #[serde(deny_unknown_fields)]
+    pub struct SecondarySun {
+        #[serde(rename="_key")]
+        pub celestialID: ids::ItemID,
+        pub effectBeaconTypeID: ids::TypeID,
+        pub position: Position,
+        pub solarSystemID: ids::SolarSystemID,
+        pub typeID: ids::TypeID
+    }
+
+    pub fn load_secondarysuns<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::SolarSystemID, SecondarySun), SDELoadError>>, SDELoadError> {
+        load_file::<SecondarySun, R>(archive, "mapSecondarySuns.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.solarSystemID, entry))))
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
     pub struct SolarSystem {
         #[serde(rename="_key")]
         pub solarSystemID: ids::SolarSystemID,
@@ -1498,6 +1734,24 @@ pub mod load {
     pub fn load_masteries<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::TypeID, MasteryLevels), SDELoadError>>, SDELoadError> {
         load_file::<ExplicitMapEntry<_, _>, R>(archive, "masteries.jsonl")
             .map(|iter| iter.map(|value| value.map(|entry| (entry._key, entry._value))))
+    }
+
+    #[derive(Debug, Deserialize)]
+    #[allow(non_snake_case)]
+    #[serde(deny_unknown_fields)]
+    pub struct MercenaryTacticalOperation {
+        #[serde(rename="_key")]
+        pub operation_id: ids::MercOperationID,
+        pub anarchy_impact: i32,
+        pub development_impact: i32,
+        pub infomorph_bonus: i32,
+        pub name: LocalizedString,
+        pub description: LocalizedString
+    }
+
+    pub fn load_merc_tactical_operations<R: Read + Seek>(archive: &mut ZipArchive<R>) -> Result<impl Iterator<Item=Result<(ids::MercOperationID, MercenaryTacticalOperation), SDELoadError>>, SDELoadError> {
+        load_file::<MercenaryTacticalOperation, R>(archive, "mercenaryTacticalOperations.jsonl")
+            .map(|iter| iter.map(|res| res.map(|entry| (entry.operation_id, entry))))
     }
 
     #[derive(Debug, Deserialize)]
@@ -2083,6 +2337,8 @@ pub mod load {
         pub categories: IndexMap<ids::CategoryID, Category>,
         pub certificates: IndexMap<ids::CertificateID, Certificate>,
         pub character_attributes: IndexMap<ids::CharacterAttributeID, CharacterAttribute>,
+        pub clone_grades: IndexMap<ids::CloneGradeID, CloneGrade>,
+        pub compressible_types: IndexMap<ids::TypeID, ids::TypeID>,
         pub contraband_types: IndexMap<ids::TypeID, ContrabandType>,
         pub control_tower_resources: IndexMap<ids::TypeID, ControlTowerResources>,
         pub corporation_activities: IndexMap<ids::CorporationActivityID, CorporationActivity>,
@@ -2093,6 +2349,7 @@ pub mod load {
         pub dogma_units: IndexMap<ids::UnitID, DogmaUnit>,
         pub dynamic_item_attributes: IndexMap<ids::TypeID, DynamicItemAttributes>,
         pub factions: IndexMap<ids::FactionID, Faction>,
+        pub freelance_job_schemas: IndexMap<ids::JobSchemaID, Vec<FreelanceJobSchema>>,
         pub graphics: IndexMap<ids::GraphicID, Graphic>,
         pub groups: IndexMap<ids::GroupID, Group>,
         pub icons: IndexMap<ids::IconID, Icon>,
@@ -2102,11 +2359,13 @@ pub mod load {
         pub map_moons: IndexMap<ids::MoonID, Moon>,
         pub map_planets: IndexMap<ids::PlanetID, Planet>,
         pub map_regions: IndexMap<ids::RegionID, Region>,
+        pub map_secondarysuns: IndexMap<ids::SolarSystemID, SecondarySun>,
         pub map_solarsystems: IndexMap<ids::SolarSystemID, SolarSystem>,
         pub map_stargates: IndexMap<ids::StargateID, Stargate>,
         pub map_stars: IndexMap<ids::StarID, Star>,
         pub market_groups: IndexMap<ids::MarketGroupID, MarketGroup>,
         pub masteries: IndexMap<ids::TypeID, MasteryLevels>,
+        pub mercenary_tactical_operations: IndexMap<ids::MercOperationID, MercenaryTacticalOperation>,
         pub meta_groups: IndexMap<ids::MetaGroupID, MetaGroup>,
         pub npc_characters: IndexMap<ids::CharacterID, NpcCharacter>,
         pub npc_corporation_divisions: IndexMap<ids::DivisionID, NpcCorporationDivision>,
@@ -2139,6 +2398,8 @@ pub mod load {
             categories: { load_categories(archive)?.collect::<Result<_, _>>()? },
             certificates: { load_certificates(archive)?.collect::<Result<_, _>>()? },
             character_attributes: { load_character_attributes(archive)?.collect::<Result<_, _>>()? },
+            clone_grades: { load_clone_grades(archive)?.collect::<Result<_, _>>()? },
+            compressible_types: { load_compressible_types(archive)?.collect::<Result<_, _>>()? },
             contraband_types: { load_contraband_types(archive)?.collect::<Result<_, _>>()? },
             control_tower_resources: { load_controltower_resources(archive)?.collect::<Result<_, _>>()?},
             corporation_activities: { load_corporation_activities(archive)?.collect::<Result<_, _>>()? },
@@ -2149,6 +2410,7 @@ pub mod load {
             dogma_units: { load_dogma_units(archive)?.collect::<Result<_, _>>()? },
             dynamic_item_attributes: { load_dynamic_item_attributes(archive)?.collect::<Result<_, _>>()? },
             factions: { load_factions(archive)?.collect::<Result<_, _>>()? },
+            freelance_job_schemas: { load_freelance_job_schemas(archive)?.collect::<Result<_, _>>()? },
             graphics: { load_graphics(archive)?.collect::<Result<_, _>>()? },
             groups: { load_groups(archive)?.collect::<Result<_, _>>()? },
             icons: { load_icons(archive)?.collect::<Result<_, _>>()? },
@@ -2158,11 +2420,13 @@ pub mod load {
             map_moons: { load_moons(archive)?.collect::<Result<_, _>>()? },
             map_planets: { load_planets(archive)?.collect::<Result<_, _>>()? },
             map_regions: { load_regions(archive)?.collect::<Result<_, _>>()? },
+            map_secondarysuns: { load_secondarysuns(archive)?.collect::<Result<_, _>>()? },
             map_solarsystems: { load_solarsystems(archive)?.collect::<Result<_, _>>()? },
             map_stargates: { load_stargates(archive)?.collect::<Result<_, _>>()? },
             map_stars: { load_stars(archive)?.collect::<Result<_, _>>()? },
             market_groups: { load_market_groups(archive)?.collect::<Result<_, _>>()? },
             masteries: { load_masteries(archive)?.collect::<Result<_, _>>()? },
+            mercenary_tactical_operations: { load_merc_tactical_operations(archive)?.collect::<Result<_, _>>()? },
             meta_groups: { load_meta_groups(archive)?.collect::<Result<_, _>>()? },
             npc_characters: { load_npc_characters(archive)?.collect::<Result<_, _>>()? },
             npc_corporation_divisions: { load_npc_corporation_divisions(archive)?.collect::<Result<_, _>>()? },
