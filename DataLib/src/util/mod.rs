@@ -64,7 +64,7 @@ pub mod user_agent {
 pub mod units {
     #[allow(non_camel_case_types)]
     #[repr(u32)]
-    #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+    #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
     #[cfg_attr(feature = "serde", derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr))]
     pub enum EVEUnit {
         Meter = 1,
@@ -128,5 +128,15 @@ pub mod units {
         AU_per_Second = 144,
         ModifierRealPercent = 205,
     }   // TODO: Port formatter function from Java, don't forget non-breaking spaces!
+
+    impl EVEUnit {
+        pub fn unit_id(self) -> u32 {
+            self as u32
+        }
+
+        pub fn format(self, value: f64) -> String {
+            unimplemented!()
+        }
+    }
 }
 

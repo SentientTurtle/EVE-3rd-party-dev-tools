@@ -1,5 +1,3 @@
-#![feature(atomic_try_update)]
-
 pub mod types;
 pub mod util;
 pub mod sde;

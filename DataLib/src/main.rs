@@ -1,19 +1,16 @@
 use std::error::Error;
 use std::fs::File;
 use std::time::Instant;
-use zip::ZipArchive;
-use evestaticdata::sde::load::load_all;
+use evestaticdata::sde;
+use evestaticdata::sde::load::SDELoader;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
-    println!("{}\n{}\n{}", evestaticdata::CRATE_NAME, evestaticdata::CRATE_VERSION, evestaticdata::CRATE_REPO);
+
+    sde::update::update_sde("./temp/sde.zip")?;
 
     let start = Instant::now();
-    evestaticdata::sde::update::update_sde("./temp/sde.zip")?;
-
-    let _sde = load_all(&mut ZipArchive::new(File::open("./temp/sde.zip")?)?)?;
-    let load_time = start.elapsed().as_millis();
-
-    println!("Loaded in: {}ms", load_time);
+    let sde = SDELoader::new(File::open("./temp/sde.zip")?)?.full()?;
+    println!("Loaded in: {}s", start.elapsed().as_secs_f64());
 
     Ok(())
 }

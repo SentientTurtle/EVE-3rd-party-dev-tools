@@ -24,7 +24,6 @@ pub type SkinMaterialID = u32;
 pub type SoundID = u32;
 pub type WormholeClassID = u32;
 pub type LandmarkID = u32;
-pub type UnitID = u32;
 pub type WarfareBuffID = u32;
 pub type CareerID = u32;
 pub type SchoolID = u32;
@@ -41,6 +40,7 @@ pub type PlanetSchematicID = u32;
 pub type CloneGradeID = u32;
 pub type JobSchemaID = u32;
 pub type MercOperationID = u32;
+pub type IndustryActivityID = u32;
 
 
 // ItemIDs
