@@ -2,6 +2,7 @@ use std::error::Error;
 use crate::types::{ids, values};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::{Debug, Display, Formatter};
+use std::fs::File;
 use std::hash::Hash;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Seek};
@@ -23,7 +24,9 @@ pub enum SDELoadError {
     /// SDE zip file did not contain expected file, did the SDE format change?
     ArchiveFileNotFound(String),
     /// Parsing the JSON content failed, did the SDE schema change?
-    ParseError { file: String, entry: usize, error: serde_json::Error}
+    ParseError { file: String, entry: usize, error: serde_json::Error},
+    /// Data integrity problem, did the SDE schema change?
+    IntegrityError(String)
 }
 
 impl Display for SDELoadError {
@@ -33,6 +36,7 @@ impl Display for SDELoadError {
             SDELoadError::Zip(err) => write!(f, "Zip error: {}", err),
             SDELoadError::ArchiveFileNotFound(filename) => write!(f, "SDE did not contain expected file: `{}`", filename),
             SDELoadError::ParseError { file, entry, error } => write!(f, "Parse error in `{}` entry {}: {}", file, entry, error),
+            SDELoadError::IntegrityError(err_description) => write!(f, "SDE data integrity error ({})", err_description)
         }
     }
 }
@@ -43,7 +47,8 @@ impl Error for SDELoadError {
             SDELoadError::IO(err) => Some(err),
             SDELoadError::Zip(err) => Some(err),
             SDELoadError::ArchiveFileNotFound(_) => None,
-            SDELoadError::ParseError { error, .. } => Some(error)
+            SDELoadError::ParseError { error, .. } => Some(error),
+            SDELoadError::IntegrityError(_) => None
         }
     }
 }
@@ -1669,13 +1674,13 @@ pub struct Moon {
 
 impl Moon {
     /// Return or generate the name of this moon
-    pub fn name<'a, F: FnOnce(ids::ItemID) -> &'a LocalizedString>(&self, celestial_name: F) -> LocalizedString {
+    pub fn name<'a, E, F: FnOnce(ids::ItemID) -> Result<&'a LocalizedString, E>>(&self, celestial_name: F) -> Result<LocalizedString, E> {
         if let Some(name) = &self.uniqueName {
-            name.clone()
+            Ok(name.clone())
         } else {
-            let planet_name = celestial_name(self.orbitID);
+            let planet_name = celestial_name(self.orbitID)?;
 
-            LocalizedString {
+            Ok(LocalizedString {
                 en: format!("{} - Moon {}", planet_name.en, self.orbitIndex),
                 de: planet_name.de.as_ref().map(|planet_name| format!("{} - Moon {}", planet_name, self.orbitIndex)),
                 es: planet_name.es.as_ref().map(|planet_name| format!("{} - Luna {}", planet_name, self.orbitIndex)),
@@ -1684,7 +1689,7 @@ impl Moon {
                 ko: planet_name.ko.as_ref().map(|planet_name| format!("{} - 위성 {}", planet_name, self.orbitIndex)),
                 ru: planet_name.ru.as_ref().map(|planet_name| format!("{} - Moon {}", planet_name, self.orbitIndex)),
                 zh: planet_name.zh.as_ref().map(|planet_name| format!("{} - 卫星 {}", planet_name, self.orbitIndex)),
-            }
+            })
         }
     }
 }
@@ -1759,21 +1764,24 @@ pub struct Planet {
 }
 
 impl Planet {
-    /// Return or generate the name of this moon
-    pub fn name<'a, F: FnOnce(ids::ItemID) -> &'a LocalizedString>(&self, system_name: F) -> LocalizedString {
+    /// Return or generate the name of this planet
+    pub fn name<'a, E, F: FnOnce(ids::SolarSystemID) -> Result<&'a LocalizedString, E>>(&self, system_name: F) -> Result<LocalizedString, E> {
         if let Some(name) = &self.uniqueName {
-            name.clone()
+            Ok(name.clone())
         } else {
-            let star_name = system_name(self.solarSystemID);
+            let star_name = system_name(self.solarSystemID)?;
 
             let number = match self.celestialIndex {
                 1 => "I", 2 => "II", 3 => "III", 4 => "IV", 5 => "V", 6 => "VI", 7 => "VII", 8 => "VIII", 9 => "IX",
                 10 => "X", 11 => "XI", 12 => "XII", 13 => "XIII", 14 => "XIV", 15 => "XV", 16 => "XVI", 17 => "XVII", 18 => "XVIII", 19 => "XIX",
                 20 => "XX", 21 => "XXI", 22 => "XXII", 23 => "XXIII", 24 => "XXIV", 25 => "XXV", 26 => "XXVI", 27 => "XXVII", 28 => "XXVIII", 29 => "XXIX",
-                _ => &format!("{}", self.celestialIndex)
+                _ => {
+                    debug_assert!(false, "Planet celestialIndex out of range!");
+                    &format!("{}", self.celestialIndex)
+                }
             };
 
-            LocalizedString {
+            Ok(LocalizedString {
                 en: format!("{} - Moon {}", star_name.en, number),
                 de: star_name.de.as_ref().map(|star_name| format!("{} {}", star_name, number)),
                 es: star_name.es.as_ref().map(|star_name| format!("{} {}", star_name, number)),
@@ -1782,7 +1790,7 @@ impl Planet {
                 ko: star_name.ko.as_ref().map(|star_name| format!("{} {}", star_name, number)),
                 ru: star_name.ru.as_ref().map(|star_name| format!("{} {}", star_name, number)),
                 zh: star_name.zh.as_ref().map(|star_name| format!("{} {}", star_name, number)),
-            }
+            })
         }
     }
 }
@@ -2026,6 +2034,23 @@ pub struct Stargate {
     pub position: CelestialPosition,
     /// TypeID for stargate object
     pub typeID: ids::TypeID
+}
+
+impl Stargate {
+    /// Return or generate the name of this stargate
+    pub fn name<'a, E, F: FnOnce(ids::SolarSystemID) -> Result<&'a LocalizedString, E>>(&self, system_name: F) -> Result<LocalizedString, E> {
+        let dest_name = system_name(self.destination.solarSystemID)?;
+        Ok(LocalizedString {
+            en: format!("Stargate ({})", dest_name.en),
+            de: Some(format!("Stargate ({})", dest_name.try_de())),
+            es: Some(format!("Portal estelar ({})", dest_name.try_es())),
+            fr: Some(format!("Portail stellaire ({})", dest_name.try_fr())),
+            ja: Some(format!("スターゲート ({})", dest_name.try_ja())),
+            ko: Some(format!("스타게이트 ({})", dest_name.try_ko())),
+            ru: Some(format!("Stargate ({})", dest_name.try_ru())),
+            zh: Some(format!("星门 ({})", dest_name.try_zh())),
+        })
+    }
 }
 
 /// Destination for a stargate, both the paired stargate and destination solarsystem
@@ -2505,18 +2530,18 @@ pub struct NpcStation {
 
 impl NpcStation {
     /// Return or generate the name of this station
-    pub fn name<'a, 'b, 'c, M, O, C>(&self, celestial_name: M, operation_name: O, corporation_name: C) -> LocalizedString
+    pub fn name<'a, 'b, 'c, E, M, O, C>(&self, celestial_name: M, operation_name: O, corporation_name: C) -> Result<LocalizedString, E>
     where
-        M: FnOnce(ids::ItemID) -> &'a LocalizedString,
-        O: FnOnce(ids::StationOperationID) -> &'b LocalizedString,
-        C: FnOnce(ids::CorporationID) -> &'c LocalizedString
+        M: FnOnce(ids::ItemID) -> Result<&'a LocalizedString, E>,
+        O: FnOnce(ids::StationOperationID) -> Result<&'b LocalizedString, E>,
+        C: FnOnce(ids::CorporationID) -> Result<&'c LocalizedString, E>
     {
         if self.useOperationName {
-            let moon_name = celestial_name(self.orbitID);
-            let corp_name = corporation_name(self.ownerID);
-            let operation_name = operation_name(self.ownerID);
+            let moon_name = celestial_name(self.orbitID)?;
+            let corp_name = corporation_name(self.ownerID)?;
+            let operation_name = operation_name(self.operationID)?;
 
-            LocalizedString {
+            Ok(LocalizedString {
                 en: format!("{} - {} {}", moon_name.en, corp_name.en, operation_name.en),
                 de: Some(format!("{} - {} {}", moon_name.try_de(), corp_name.try_de(), operation_name.try_de())),
                 es: Some(format!("{} - {} {}", moon_name.try_es(), corp_name.try_es(), operation_name.try_es())),
@@ -2525,12 +2550,12 @@ impl NpcStation {
                 ko: Some(format!("{} - {} {}", moon_name.try_ko(), corp_name.try_ko(), operation_name.try_ko())),
                 ru: Some(format!("{} - {} {}", moon_name.try_ru(), corp_name.try_ru(), operation_name.try_ru())),
                 zh: Some(format!("{} - {} {}", moon_name.try_zh(), corp_name.try_zh(), operation_name.try_zh())),
-            }
+            })
         } else {
-            let moon_name = celestial_name(self.orbitID);
-            let corp_name = corporation_name(self.ownerID);
+            let moon_name = celestial_name(self.orbitID)?;
+            let corp_name = corporation_name(self.ownerID)?;
 
-            LocalizedString {
+            Ok(LocalizedString {
                 en: format!("{} - {}", moon_name.en, corp_name.en),
                 de: Some(format!("{} - {}", moon_name.try_de(), corp_name.try_de())),
                 es: Some(format!("{} - {}", moon_name.try_es(), corp_name.try_es())),
@@ -2539,7 +2564,7 @@ impl NpcStation {
                 ko: Some(format!("{} - {}", moon_name.try_ko(), corp_name.try_ko())),
                 ru: Some(format!("{} - {}", moon_name.try_ru(), corp_name.try_ru())),
                 zh: Some(format!("{} - {}", moon_name.try_zh(), corp_name.try_zh())),
-            }
+            })
         }
     }
 }
@@ -3044,11 +3069,11 @@ pub struct Type {
     pub iconID: Option<ids::IconID>,
     /// 3D model information, see [`Graphic`]
     pub graphicID: Option<ids::GraphicID>,
-    /// Item volume
+    /// Item volume in m³
     ///
     /// This is the assembled volume for ships/etc. Packaged volumes are currently unavailable through the SDE.
     pub volume: Option<f64>,
-    /// Item mass
+    /// Item mass in kg
     ///
     /// Mainly used for wormhole transit and jump portal fuel calculations
     pub mass: Option<f64>,
@@ -3135,7 +3160,7 @@ pub struct SDE_Full {
 }
 
 // SDELoader encapsulates ZipArchive & zip crate dependency
-pub struct SDELoader<R: Read + Seek> {
+pub struct SDELoader<R: Read + Seek = File> {
     archive: ZipArchive<R>
 }
 
