@@ -1,0 +1,1894 @@
+# Turtle's Cheat Sheet for the EVE Online 'Static Data Export'
+#
+# Each file in the Static Data Export is a mapping of the file's datatype to it's ID
+# Field names with a trailing question mark `?` indicate an optional/nullable field that may not be present
+#
+# This cheat sheet is derived from code comments (https://github.com/SentientTurtle/EVE-3rd-party-dev-tools), and is structured accordingly.
+# There will be more redundancy than conventional documentation. Some of the data structure is opinionated.
+# Only the structure and types are validated automatically, the docs may be incomplete, shallowly researched, or outdated.
+#
+# This file is *NOT* valid YAML. Do not attempt to parse it, your parser will explode.
+# If you have a good reason why it should become YAML-compliant or have an alternate notation for something, feel free to get in touch or open an issue in the repo above.
+
+# This file *may* be used as "context" for AI tools. Beware that it is a large file. I am not responsible if you delete your own wallet.
+            
+
+# Common Data Types #
+
+
+# Position of an object on the New Eden cluster map, units in metres.
+# 
+# See <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
+MapPosition:
+    # +X, East/Right
+    x: number
+    # +Y, Up
+    y: number
+    # +Z, North/Forward
+    z: number
+
+
+# Position of an object within a [`SolarSystem`], units in metres.
+# 
+# See <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
+CelestialPosition:
+    # +X, West/Left
+    x: number
+    # +Y, Up
+    y: number
+    # +Z, North/Forward
+    z: number
+
+
+# 2D-map position of an object, units in metres.
+# 
+# Up/down, Left/right directions depend on context, see <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
+Position2D:
+    # +X, East/Right
+    x: number
+    # +Y, North/Up
+    y: number
+
+
+# String with multiple language variants
+# 
+# English is always available. Usually, all other languages are also available
+LocalizedString:
+    # English
+    en: string
+    # German
+    de?: string
+    # Spanish
+    es?: string
+    # French
+    fr?: string
+    # Japanese
+    ja?: string
+    # Korean
+    ko?: string
+    # Russian
+    ru?: string
+    # Chinese
+    zh?: string
+
+
+## SDE File: agentsInSpace.jsonl agentsInSpace.yaml
+
+# Agent (Mission NPC) that is located in space, rather than docked in a station
+# 
+# Additional Agent information is contained in [`NpcCharacter`] data
+AgentInSpace:
+    # CharacterID for this agent
+    !!key agentID: CharacterID (integer)
+    # 'Dungeon' within which the agent is located
+    # 
+    # Data about dungeons is not available for EVE 3rd party developers
+    dungeonID: DungeonID (integer)
+    # SolarSystem in which the Agent is located
+    solarSystemID: SolarSystemID (integer)
+    # Spawnpoint for agent, no data available for EVE 3rd party developers
+    spawnPointID: SpawnPointID (integer)
+    # TypeID of the agent's ship (Note: Agent Ships are not the same as the player-flyable ships, and have different TypeIDs)
+    typeID: TypeID (integer)
+
+
+## SDE File: agentTypes.jsonl agentTypes.yaml
+
+# The different kinds of agent
+# 
+# See <https://wiki.eveuniversity.org/Agent#Category> for information about the various kinds of Agent
+AgentType:
+    # Identifier for this AgentType
+    !!key agentTypeID: AgentTypeID (integer)
+    # Name for this AgentType
+    name: !!oneOf(string)
+      - NonAgent
+      - BasicAgent
+      - TutorialAgent
+      - ResearchAgent
+      - CONCORDAgent
+      - GenericStorylineMissionAgent
+      - StorylineMissionAgent
+      - EventMissionAgent
+      - FactionalWarfareAgent
+      - EpicArcAgent
+      - AuraAgent
+      - CareerAgent
+      - HeraldryAgent
+
+
+## SDE File: ancestries.jsonl ancestries.yaml
+
+# Character Ancestry; Now-unused character creation element (Removed from player character creation 2021-03-02)
+Ancestry:
+    # Identifier for this Ancestry
+    !!key ancestryID: AncestryID (integer)
+    # Bloodline this ancestry is a part of
+    bloodlineID: BloodlineID (integer)
+    # Skill training attribute modifier
+    charisma: integer
+    # Skill training attribute modifier
+    intelligence: integer
+    # Skill training attribute modifier
+    memory: integer
+    # Skill training attribute modifier
+    perception: integer
+    # Skill training attribute modifier
+    willpower: integer
+    # Ancestry description as (previously) displayed in game client
+    description: LocalizedString
+    # Icon, optional
+    iconID?: IconID (integer)
+    # Ancestry name
+    name: LocalizedString
+    # Short English description
+    shortDescription?: string
+
+
+## SDE File: archetypes.jsonl archetypes.yaml
+
+# Dungeon Archetype
+Archetype:
+    # ID for this Archetype
+    !!key archetypeID: DungeonArchetypeID (integer)
+    # Title; Kind of sites in this archetype
+    title?: LocalizedString
+    # Text description of this archetype
+    description: LocalizedString
+
+
+## SDE File: bloodlines.jsonl bloodlines.yaml
+
+# Character Bloodline; Character creation element
+Bloodline:
+    # Identifier for this Bloodline
+    !!key bloodlineID: BloodlineID (integer)
+    # Default NPC Corporation for characters with this Bloodline
+    corporationID: CorporationID (integer)
+    # Bloodline description, as shown in game client
+    description: LocalizedString
+    # Icon, optional
+    iconID?: IconID (integer)
+    # Bloodline name
+    name: LocalizedString
+    # Character race this bloodline is a part of
+    raceID: RaceID (integer)
+    # Skill training attribute modifier
+    charisma: integer
+    # Skill training attribute modifier
+    intelligence: integer
+    # Skill training attribute modifier
+    memory: integer
+    # Skill training attribute modifier
+    perception: integer
+    # Skill training attribute modifier
+    willpower: integer
+
+
+## SDE File: blueprints.jsonl blueprints.yaml
+
+# Industry Blueprint. Also describes Reaction Formulae and the Sleeper Relics used in T3 production
+# 
+# Note: The SDE provides Blueprint Copy and Blueprint Original data as 'merged' into a single entry for the Blueprint's typeID.
+# 'Copying' & 'Research Time/Material' activities are not usable with BPCs, 'Invention' activity is not usable with BPOs.
+Blueprint:
+    # Key; Blueprint TypeID. Duplicate of explicit `blueprintTypeID` field in entry. This library current favours using the explicit field, this may change.
+    # In the event this is de-duplicated by removing the entry field this field will be renamed to [`Blueprint::blueprintTypeID`] to retain backwards compatibility.
+    !!key blueprintTypeID_key: TypeID (integer)
+    # TypeID of this blueprint. BP Originals and BP Copies share the same TypeID.
+    blueprintTypeID: TypeID (integer)
+    # The maximum amount of job runs that a single blueprint copy can have
+    # 
+    # This is not the limit of repeats that can be scheduled in a single manufacturing/copying/etc job.
+    maxProductionLimit: integer
+    # Activities available for this blueprint type
+    activities:
+        # Blueprint copying activity. When present on blueprint types, only applicable to blueprint *originals*
+        copying?: BPActivity
+        # Manufacturing activity
+        manufacturing?: BPActivity
+        # Time Efficiency Research activity. When present on blueprint types, only applicable to blueprint *originals*
+        research_time?: BPActivity
+        # Material Efficiency Research activity. When present on blueprint types, only applicable to blueprint *originals*
+        research_material?: BPActivity
+        # Invention activity. Applicable to Sleeper Relics and blueprint *copies* but not blueprint originals.
+        invention?: BPActivity
+        # Reaction activity
+        reaction?: BPActivity
+
+
+# A single [`Blueprint`] activity
+BPActivity:
+    # Materials and quantity required for one run of this activity
+    materials?: [
+        typeID: TypeID (integer)
+        quantity: integer
+        probability?: number
+    ]
+    # Products, quantity, and optional probability for one run of this activity.
+    # Only one product type is allowed per run of this activity; When multiple types of products are available, one must be selected by the player when setting up the industry job
+    products?: [
+        typeID: TypeID (integer)
+        quantity: integer
+        probability?: number
+    ]
+    # Skills required to set up a run of this activity
+    skills?: [
+        typeID: TypeID (integer)
+        level: SkillLevel (integer [1, 5])
+    ]
+    # Time required for one run of this activity, in seconds
+    time: integer
+
+
+## SDE File: categories.jsonl categories.yaml
+
+# Item Type 'Category'; Collection of [Groups](Group)
+Category:
+    # ID for this category
+    !!key categoryID: TypeID (integer)
+    # Name of this category
+    name: LocalizedString
+    # 'Published' status; If false, not visible to players in the game client
+    published: boolean
+    # Icon, optional
+    iconID?: IconID (integer)
+
+
+## SDE File: certificates.jsonl certificates.yaml
+
+# Ship Mastery Certificate
+Certificate:
+    # ID for this certificate
+    !!key certificateID: CertificateID (integer)
+    # Skill [`Group`] this Certificate is for
+    groupID: GroupID (integer)
+    # Certificate name
+    name: LocalizedString
+    # Certificate description
+    description: LocalizedString
+    # Ships this certificate is recommended for
+    recommendedFor?: [ TypeID (integer) ]
+    # Skill levels for this certificate
+    skillTypes: {
+        TypeID (integer):
+            # Skill level required for 'basic' certificate
+            basic: SkillLevel (integer [1, 5])
+            # Skill level required for 'standard' certificate
+            standard: SkillLevel (integer [1, 5])
+            # Skill level required for 'improved' certificate
+            improved: SkillLevel (integer [1, 5])
+            # Skill level required for 'advanced' certificate
+            advanced: SkillLevel (integer [1, 5])
+            # Skill level required for 'elite' certificate
+            elite: SkillLevel (integer [1, 5])
+    }
+
+
+## SDE File: characterAttributes.jsonl characterAttributes.yaml
+
+# Character skill training Attribute
+CharacterAttribute:
+    # ID for this character attribute
+    !!key characterAttributeID: CharacterAttributeID (integer)
+    # Name, as displayed on the character sheet
+    name: LocalizedString
+    # Description, in English
+    description: string
+    # Icon for attribute
+    iconID: IconID (integer)
+    # Notes, in English
+    notes: string
+    # Short description, in English
+    shortDescription: string
+
+
+## SDE File: cloneGrades.jsonl cloneGrades.yaml
+
+# Information about Alpha clones
+# Currently there is one entry for each of the 4 races' Alpha Clones, but the entries are the same; Each character race is allowed to train the same skills, including ships of the other races
+CloneGrade:
+    # ID for this clone grade
+    !!key cloneGradeID: CloneGradeID (integer)
+    # Name (Not displayed in-game)
+    name: string
+    # Skills that may be trained by this clone grade
+    skills: [
+        # Skill typeID
+        typeID: TypeID (integer)
+        # Maximum skill level that may be trained
+        level: SkillLevel (integer [1, 5])
+    ]
+
+
+## SDE File: compressibleTypes.jsonl compressibleTypes.yaml
+
+# Information about ore/gas/ice compression
+# Ore compression has a 1:1 input output ratio, N units of 'oreTypeID' yield N units of 'compressedTypeID'
+# Volume ratio is provided by `compressedType.volume / oreType.volume`
+# For ore and ice, compression is lossless. Gas must be decompressed before use, where some losses are had. (Depending on skills & facility used)
+CompressibleType:
+    # Ore (input) typeID
+    !!key oreTypeID: TypeID (integer)
+    # Compressed ore (output) typeID
+    compressedTypeID: TypeID (integer)
+
+
+## SDE File: contrabandTypes.jsonl contrabandTypes.yaml
+
+# Contraband status information for a [`Type`]
+ContrabandType:
+    # Type for which this Contraband information applies
+    !!key typeID: TypeID (integer)
+    # Per-faction contraband info; An entry means the Type is contraband in the given faction
+    factions: {
+        FactionID (integer):
+            # Minimum solarsystem security in which NPC customs agents will attack if this type of contraband is carried
+            # 
+            # Mechanic appears to be disabled, with this value always set greater than the maximum security level of 1.0
+            attackMinSec: number
+            # Minimum solarsystem security in which NPC customs confiscate this type of contraband
+            confiscateMinSec: number
+            # Fine (multiplier * item value carried, e.g. 4.5 = 450% of the contraband's value) to be paid if caught
+            fineByValue: number
+            # Faction standing loss if caught carrying this contraband
+            standingLoss: number
+    }
+
+
+## SDE File: controlTowerResources.jsonl controlTowerResources.yaml
+
+# Resources required for Player-owned-Starbase Control Tower operation
+ControlTowerResources:
+    # TypeID of the Control Tower type this information applies to
+    !!key towerTypeID: TypeID (integer)
+    # Resources required for the operation of this Control Tower
+    resources: [
+        # Purpose for which this resource is required. (Either Online operation or Reinforcement)
+        purpose: !!oneOf(number)
+            # Resource required for keeping a Control Tower online
+          - Online=1
+            # Legacy value, unused
+          - Power=2
+            # Legacy value, unused
+          - CPU=3
+            # Resource required for Control Tower reinforcement
+          - Reinforce=4
+        # Quantity required per hour of operation
+        quantity: integer
+        # Type of the required resource
+        resourceTypeID: TypeID (integer)
+        # If set, this resource is only required if operating in the specified Faction's space
+        factionID?: FactionID (integer)
+        # If set, this resource is only required if operating above the specified security level
+        minSecurityLevel?: number
+    ]
+
+
+## SDE File: corporationActivities.jsonl corporationActivities.yaml
+
+# NPC Station Activity/"Specialization"
+CorporationActivity:
+    # ID for this activity
+    !!key corporationActivityID: CorporationActivityID (integer)
+    # Name for this activity
+    name: LocalizedString
+
+
+## SDE File: dbuffCollections.jsonl dbuffCollections.yaml
+
+# 'Warefare Buff'; Command Burst bonus effects
+WarfareBuff:
+    # ID for this warfare buff. Referenced by attributes on Command Burst charges
+    !!key warfareBuffID: WarfareBuffID (integer)
+    # Aggregate mode for multiple buffs; Whether the maximum or minimum value is selected when multiple buffs of different strengths are applied to a ship
+    aggregateMode: !!oneOf(string)
+        # If multiple buffs stack, the maximum value is selected
+      - Maximum
+        # If multiple buffs stack, the minimum value is selected
+      - Minimum
+    # Developer description, in English
+    developerDescription: string
+    # Display name, as shown in tooltip in-game
+    displayName?: LocalizedString
+    # Attributes whose effects are applied as Item Modifiers
+    itemModifiers?: [ AttributeID (integer) ]
+    # Attributes whose effects are applied as Location Group Modifiers
+    locationGroupModifiers?: [
+        # Attribute source for effect
+        dogmaAttributeID: AttributeID (integer)
+        # Applicable group
+        groupID: GroupID (integer)
+    ]
+    # Attributes whose effects are applied as Location Modifiers
+    locationModifiers?: [ AttributeID (integer) ]
+    # Attributes whose effects are applied as Location with-required-skill Modifiers
+    locationRequiredSkillModifiers?: [
+        # Attribute source for effect
+        dogmaAttributeID: AttributeID (integer)
+        # Skill required by applicable types
+        skillID: TypeID (integer)
+    ]
+    # Operation applied by modifiers
+    operationName: !!oneOf(string)
+      - PostMul
+      - PostPercent
+      - ModAdd
+      - PreAssignment
+      - PostAssignment
+    # How the effect value is displayed in-game
+    showOutputValueInUI: !!oneOf(string)
+        # Buff amount is not shown
+      - Hide
+        # Buff amount is shown as-is, e.g. `10 -> "10%", -10 -> "-10%"`
+      - ShowNormal
+        # Buff amount is shown inverted, e.g. `10 -> "-10%", -10 -> "10%"`
+      - ShowInverted
+
+
+## SDE File: dogmaAttributeCategories.jsonl dogmaAttributeCategories.yaml
+
+# Attribute Category, grouping of [`Attribute`]
+AttributeCategory:
+    # ID for this category
+    !!key attributeCategoryID: AttributeCategoryID (integer)
+    # Category name, in English
+    name: string
+    # Description, in English
+    description?: string
+
+
+## SDE File: dogmaAttributes.jsonl dogmaAttributes.yaml
+
+# Dogma Attribute, describing properties for [`Type`]s. Such as HP, maximum velocity, and other item stats
+Attribute:
+    # ID for this attribute
+    !!key attributeID: AttributeID (integer)
+    # [`AttributeCategory`] for this attribute
+    attributeCategoryID?: AttributeCategoryID (integer)
+    # ???
+    chargeRechargeTimeID?: integer
+    # ???
+    dataType: integer
+    # Default implied value if an attribute is not explicitly given for a type
+    defaultValue: number
+    # "Developer" description in English
+    description?: string
+    # In-game name, as displayed in item stats
+    displayName?: LocalizedString
+    # If true, display this attribute when it's value is `0.0`. If false, attribute is hidden when the value is `0.0`
+    displayWhenZero: boolean
+    # If set to true, higher values are considered better than lower values. Inverted for false. Used for e.g. determining which module have a better attribute value than another module
+    highIsGood: boolean
+    # Icon for attribute, as disabled in in-game stats
+    iconID?: IconID (integer)
+    # Attribute specifying the maximum value for this attribute
+    maxAttributeID?: AttributeID (integer)
+    # Attribute specifying the minimum value for this attribute
+    minAttributeID?: AttributeID (integer)
+    # "Developer" name in English
+    name: string
+    # 'Published' status; If false, not visible to players in the game client
+    published: boolean
+    # If false, this attribute is subject to stacking penalties
+    stackable: boolean
+    # Tooltip tile, as displayed when hovering over an attribute in-game
+    tooltipTitle?: LocalizedString
+    # Tooltip description, as displayed when hovering over an attribute in-game
+    tooltipDescription?: LocalizedString
+    # Unit for this attribute's values
+    unitID?: UnitID (integer)
+
+
+## SDE File: dogmaEffects.jsonl dogmaEffects.yaml
+
+# Dogma Effect, describing interactions of [`Attribute`]s
+Effect:
+    # ID for this effect
+    !!key effectID: EffectID (integer)
+    # Category of this effect
+    effectCategoryID: EffectCategoryID (integer)
+    # Effect name
+    name: string
+    # Description of the effect, fitting hardpoint & slot effects have their description shown ingame
+    description?: LocalizedString
+    # (Unused) If set to true, auto-repeat of this module is disabled
+    disallowAutoRepeat: boolean
+    # Display name for effect, as shown in-game
+    displayName?: LocalizedString
+    # Graphic related ID. Not documented here.
+    guid?: string
+    # Effect icon
+    iconID?: IconID (integer)
+    # Whether effect counts as assistance in combat (such as for criminal/suspect timers)
+    isAssistance: boolean
+    # Whether effect counts as attacking in combat (such as for criminal/suspect timers)
+    isOffensive: boolean
+    # Whether effect can be active during warp
+    isWarpSafe: boolean
+    # Whether effect is set as visible in the client. (Unusual and unintuitive for effects)
+    published: boolean
+    # (Unused) Sound effect name
+    sfxName?: string
+    # Unintuitive dogma wizardry. Not documented here.
+    distribution?: integer
+    # Unintuitive dogma wizardry. Not documented here.
+    electronicChance: boolean
+    # Unintuitive dogma wizardry. Not documented here.
+    dischargeAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    durationAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    falloffAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    fittingUsageChanceAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    npcActivationChanceAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    npcUsageChanceAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    rangeAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    trackingSpeedAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    resistanceAttributeID?: AttributeID (integer)
+    # Unintuitive dogma wizardry. Not documented here.
+    rangeChance: boolean
+    # Unintuitive dogma wizardry. Not documented here.
+    propulsionChance: boolean
+    # Unintuitive dogma wizardry. Not documented here.
+    modifierInfo?: [
+        domain: string
+        func: string
+        operation?: integer
+        modifiedAttributeID?: AttributeID (integer)
+        modifyingAttributeID?: AttributeID (integer)
+        groupID?: GroupID (integer)
+        effectID?: EffectID (integer)
+        skillTypeID?: TypeID (integer)
+    ]
+
+
+## SDE File: dogmaUnits.jsonl dogmaUnits.yaml
+
+# Unit of measurement used in EVE Online, see [`EVEUnit`] for details
+# For formatting values with units, use [`EVEUnit::format`]
+DogmaUnit:
+    # UnitID for this unit, encoded as an [`EVEUnit`] enum
+    # 
+    # EVEUnit provides formatting functions
+    !!key unitID: UnitID (integer)
+    # Name of this unit, a unit or it's associated measure.
+    name: string
+    # Description of this unit, either the full name of the unit ("Kilogram per cubic meter") or a short description of the unit and it's purpose
+    description?: LocalizedString
+    # Displayed text snippet, usually the short symbol for the unit
+    displayName?: LocalizedString
+
+
+## SDE File: dungeons.jsonl dungeons.yaml
+
+# Dungeon, Mission/Anomaly instance
+Dungeon:
+    # ID for this dungeon
+    !!key dungeonID: DungeonID (integer)
+    # Archetype this dungeon belongs to
+    archetypeID: DungeonArchetypeID (integer)
+    # Name for this dungeon, as shown in-game
+    name: LocalizedString
+    # Description for this dungeon, shown in pop-up on entry(?)
+    description?: LocalizedString
+    # Description for this dungeon, shown in pop-up on entry(?)
+    gameplayDescription?: LocalizedString
+    # Ships allowed to enter this dungeon (Usually locked out by an acceleration gate)
+    allowedShipsList?: [ TypeListID (integer) ]
+    # Associated faction
+    factionID?: FactionID (integer)
+
+
+## SDE File: dynamicItemAttributes.jsonl dynamicItemAttributes.yaml
+
+# Dynamic attributes for a [`Type`], used for Mutaplasmids.
+DynamicItemAttributes:
+    # Mutaplasmid typeID
+    !!key mutaplasmidTypeID: TypeID (integer)
+    # Attributes modified by this mutaplasmid
+    # 
+    # Upon application of the mutaplasmid, a random roll is made between `max` and `min` to generate the value multiplier
+    attributeIDs: {
+        AttributeID (integer):
+            # If true, a higher value for this attribute is considered better (e.g. HP bonus), if false a lower value is "better" (e.g. CPU/PG usage)
+            # 
+            # [`Attribute`]s also have their own `highIsGood` field
+            highIsGood?: boolean
+            # Maximum multiplier for attribute value
+            max: number
+            # Minimum multiplier for attribute value
+            min: number
+    }
+    # "IOMapping"; Describes which types the mutaplasmid can be applied to, and the resulting output type.
+    inputOutputMapping: [
+        # List of typeIDs the parent mutaplasmid can be applied to
+        applicableTypes: [ TypeID (integer) ]
+        # Output type of modified module
+        resultingType: TypeID (integer)
+    ]
+
+
+## SDE File: factions.jsonl factions.yaml
+
+# The major and minor NPC factions
+# 
+# e.g. Caldari/Minmatar/Amarr/Gallente but also CONCORD, ORE, and SOE
+Faction:
+    # FactionID
+    !!key factionID: FactionID (integer)
+    # CorporationID for the "main" corporation of this faction. The Navy corporation for major factions.
+    corporationID?: CorporationID (integer)
+    # Faction name
+    name: LocalizedString
+    # Faction description
+    description: LocalizedString
+    # Shorter description
+    shortDescription?: LocalizedString
+    # Logo filename
+    flatLogo?: string
+    # Logomark filename
+    flatLogoWithName?: string
+    # Logo iconID
+    iconID: IconID (integer)
+    # [`CharacterRace`]'s included in this faction
+    memberRaces: [ RaceID (integer) ]
+    # CorporationID of the factional warfare corporation, if this faction participates in fwar.
+    militiaCorporationID?: CorporationID (integer)
+    # Unknown
+    sizeFactor: number
+    # "Capital"/home system of this faction
+    solarSystemID: SolarSystemID (integer)
+    # Whether this faction uses a unique name; Currently always true, and the [`name`] is always present
+    uniqueName: boolean
+
+
+## SDE File: freelanceJobSchemas.jsonl freelanceJobSchemas.yaml
+
+# Freelance job schema, describes the possible kinds of freelance job
+FreelanceJobSchema:
+    # Type of job this schema describes
+    !!key job_type: !!oneOf(string)
+        # Boost another (specified) player's shield HP
+      - BoostShield
+        # Capture FW complex
+      - CaptureFWComplex
+        # Damage player ships
+      - DamageShip
+        # Defend FW complex
+      - DefendFWComplex
+        # Deliver (provide) item
+      - DeliverItem
+        # Destroy player ships
+      - KillCapsuleer
+        # Destroy NPC ships
+      - KillNPC
+        # Mine (but not hand over) ore
+      - MineOre
+        # Repair another (specified) player's armour HP
+      - RepairArmor
+        # Ship insurance; Pays out on own ship's destruction
+        # 
+        # Automatic form of player-run "Ship Replacement Programs"
+      - ShipInsurance
+    # Job title/name
+    title: LocalizedString
+    # Description of this job type, shown in-game when hovering over the job type selection
+    description: LocalizedString
+    # Search filter tags for this job schema,
+    contentTags: [ string ]
+    # Multiplier of contribution payout
+    # 
+    # Used for 'insurance' job type to determine % of ship value that will be reimbursed
+    contributionMultiplier?:
+        # Title of this option in the job creation menu
+        title: LocalizedString
+        # Description of this option in the job creation menu
+        # 
+        # Shown in-game when hovering over the (i) info button
+        description: LocalizedString
+        # Placeholder text if no value is set in the input
+        unsetDescription: LocalizedString
+        # Icon for this option
+        iconID: string
+        # Default value set in this option
+        defaultValue: number
+        # Maximum value allowed for this option
+        maxValue: number
+        # Minimum value allowed for this option
+        minValue: number
+    # Description text for progress; e.g. "HP repaired" or "Items delivered"
+    progressDescription: LocalizedString
+    # Description text for reward; e.g. "Reward per HP boosted" or "Reward per item delivered"
+    rewardDescription: LocalizedString
+    # Description text for total job goal; e.g. "Total hit points to be boosted" or "Number of items to be delivered"
+    targetDescription: LocalizedString
+    # Icon for job
+    iconID: string
+    # Maximum contributions allowed per character
+    maxContributionsPerParticipant:
+        # Title of this option in the job creation menu
+        title: LocalizedString
+        # Description of this option in the job creation menu
+        # 
+        # Shown in-game when hovering over the (i) info button
+        description: LocalizedString
+        # Placeholder text if no value is set in the input
+        unsetDescription: LocalizedString
+        # Icon for this option
+        iconID: string
+    # Maximum progress per single contribution
+    # 
+    # Used for insurance, where this determines the maximum payout for a single ship loss
+    maxProgressPerContribution?:
+        # Title of this option in the job creation menu
+        title: LocalizedString
+        # Description of this option in the job creation menu
+        # 
+        # Shown in-game when hovering over the (i) info button
+        description: LocalizedString
+        # Placeholder text if no value is set in the input
+        unsetDescription: LocalizedString
+        # Icon for this option
+        iconID: string
+    # Parameters (other options)
+    parameters: {
+        string:
+            # Boolean-type parameter
+            boolean?:
+                choiceLabel: LocalizedString
+                default: boolean
+                description: LocalizedString
+                iconID: string
+                optionFalse:
+                    title: LocalizedString
+                    description: LocalizedString
+                optionTrue:
+                    title: LocalizedString
+                    description: LocalizedString
+                title: LocalizedString
+            # Delivery-type parameter
+            itemDelivery?:
+                deliveryLocation:
+                    acceptedValueTypes: [ string ]
+                    description: LocalizedString
+                    iconID: string
+                    maxEntries: number
+                    title: LocalizedString
+                    unsetDescription: LocalizedString
+                description: LocalizedString
+                iconID: string
+                inventoryType:
+                    acceptedValueTypes: [ string ]
+                    description: LocalizedString
+                    iconID: string
+                    title: LocalizedString
+                    unsetDescription: LocalizedString
+                title: LocalizedString
+            # Matcher-type parameter
+            # 
+            # Restricts in which places
+            matcher?:
+                acceptedValueTypes: [ string ]
+                description: LocalizedString
+                iconID: string
+                maxEntries: number
+                optional: boolean
+                title: LocalizedString
+                type: string
+                unsetDescription: LocalizedString
+    }
+
+
+## SDE File: graphics.jsonl graphics.yaml
+
+# 3D Graphics information, such as metadata for models+textures
+Graphic:
+    # ID for this graphic
+    !!key graphicID: GraphicID (integer)
+    # For graphics consisting of a single file, SharedCache resource
+    graphicFile?: CacheResource
+    # Folder for icons (e.g. for ships)
+    iconFolder?: string
+    # Faction of this object, used for base colour
+    sofFactionName?: string
+    # Hull name for a ship, drone, etc. Determines model
+    sofHullName?: string
+    # ???
+    sofLayout?: [ string ]
+    # Matersial set for model
+    sofMaterialSetID?: MaterialSetID (integer)
+    # Faction of this object, used for various effect colours
+    sofRaceName?: string
+
+
+## SDE File: groups.jsonl groups.yaml
+
+# Item-type Group
+# 
+# Each [`Type`] is part of a parent Group
+Group:
+    # ID for this group
+    !!key groupID: GroupID (integer)
+    # Whether types in this group are anchorable (e.g. Deployables, player structures, etc)
+    anchorable: boolean
+    # Whether types in this group are always anchored (e.g. Stations, which do not exist in unanchored form)
+    anchored: boolean
+    # Parent category of this group
+    categoryID: CategoryID (integer)
+    # Whether this type can be fitted to ship in "non-singleton" ("repackaged"/stackable) form, true for types like ammo
+    fittableNonSingleton: boolean
+    # Icon of this group
+    iconID?: IconID (integer)
+    # Name of this group
+    name: LocalizedString
+    # Whether this group is visible to players in-game
+    published: boolean
+    # ???
+    useBasePrice: boolean
+
+
+## SDE File: icons.jsonl icons.yaml
+
+# Icon and images
+Icon:
+    # ID for this icon
+    !!key iconID: IconID (integer)
+    # Cache resource for this icon
+    iconFile: CacheResource
+
+
+## SDE File: landmarks.jsonl landmarks.yaml
+
+# Landmark in the game world
+Landmark:
+    # ID for this landmark
+    !!key landmarkID: LandmarkID (integer)
+    # Name of the landmark, shown in-game on the map and on navigation beacons
+    name: LocalizedString
+    # Description of this landmark, shown in-game on the map or as show-info on the object.
+    description: LocalizedString
+    # Icon for this landmark
+    iconID?: IconID (integer)
+    # Location of this landmark, currently always a solarsystemID
+    locationID?: LocationID (integer)
+    # Position of the landmark relative to the cluster map origin
+    position: MapPosition
+
+
+## SDE File: mapAsteroidBelts.jsonl mapAsteroidBelts.yaml
+
+# Asteroid belt
+AsteroidBelt:
+    # ID for this asteroid belt, unique for each belt in the game
+    !!key asteroidBeltID: AsteroidBeltID (integer)
+    # Unique name of this asteroid belt. If absent, uses generated name. See [`AsteroidBelt::name()`]
+    uniqueName?: LocalizedString
+    # Celestial ID of the planet or moon this belt orbits
+    orbitID: ItemID (integer)
+    # Index of the planet this asteroid belt orbits, starting at 1 for the first planet
+    celestialIndex: integer
+    # Index this asteroid belt within the planet, starting at 1. As shown in the name of "[planet] - Asteroid Belt N" in-game.
+    # 
+    # Counts separately from moons and stations. There can be both a moon with orbitindex N and an asteroidbelt with orbitindex N around the same planet
+    orbitIndex: integer
+    # In-system position of this asteroid belt
+    position: CelestialPosition
+    # Radius of this asteroid belt
+    # 
+    # Generally set to `1` for asteroid belts, has no correlation to actual on-grid size of the asteroid belt
+    radius?: number
+    # [`SolarSystem`] this asteroidbelt is in
+    solarSystemID: SolarSystemID (integer)
+    # Additional celestial information for this asteroidbelt
+    statistics?:
+        density: number
+        eccentricity: number
+        escapeVelocity: number
+        locked: boolean
+        massGas?: number
+        massDust: number
+        orbitPeriod: number
+        orbitRadius: number
+        rotationRate: number
+        spectralClass: string
+        surfaceGravity: number
+        temperature: number
+    # TypeID of this asteroidbelt. Currently, always type `15 - Asteroid Belt`
+    typeID: TypeID (integer)
+
+
+## SDE File: mapConstellations.jsonl mapConstellations.yaml
+
+# Constellation of solarsystems
+Constellation:
+    # ID for this constellation
+    !!key constellationID: ConstellationID (integer)
+    # [`Region`] this constellation belongs to
+    regionID: RegionID (integer)
+    # Position of this constellation (approximate but not exact center), relative to the map origin
+    position: MapPosition
+    # Name of this constellation
+    name: LocalizedString
+    # Solarsystems in this constellation
+    solarSystemIDs: [ SolarSystemID (integer) ]
+    # Faction holding this constellation
+    # 
+    # May be overridden by factionID values in [`SolarSystem`]
+    # If `None`, Faction holdings should be inherited from [`Region::factionID`]
+    factionID?: FactionID (integer)
+    # Wormhole class for this constellation
+    # 
+    # May be overridden by wormholeClassID values in [`SolarSystem`]
+    # If `None`, WH class should be inherited from [`Region::wormholeClassID`]
+    wormholeClassID?: WormholeClassID (integer)
+
+
+## SDE File: mapMoons.jsonl mapMoons.yaml
+
+# Moon
+Moon:
+    # ID for this moon
+    !!key moonID: MoonID (integer)
+    # Unique name of this moon. If absent, uses generated name. See [`Moon::name()`]
+    uniqueName?: LocalizedString
+    # [`NpcStation`]s orbiting this moon
+    npcStationIDs?: [ StationID (integer) ]
+    # CelestialID (PlanetID) of the planet this moon orbits
+    orbitID: ItemID (integer)
+    # Index of the planet this moon orbits, starting at 1 for the first planet
+    celestialIndex: integer
+    # Index this moon within the planet, starting at 1. As shown in the name of "[planet] - Moon N" in-game.
+    # 
+    # Counts separately from asteroidbelts and stations. There can be both a moon with orbitindex N and an asteroidbelt with orbitindex N around the same planet
+    orbitIndex: integer
+    # In-system position of this moon
+    position: CelestialPosition
+    # Moon radius
+    radius: number
+    # Solarsystem this moon is located in
+    solarSystemID: SolarSystemID (integer)
+    # TypeID for moon object
+    typeID: TypeID (integer)
+    # Additional celestial information for this moon
+    statistics?:
+        density: number
+        eccentricity: number
+        escapeVelocity: number
+        locked: boolean
+        massDust: number
+        massGas?: number
+        pressure: number
+        orbitPeriod: number
+        orbitRadius: number
+        rotationRate: number
+        spectralClass: string
+        surfaceGravity: number
+        temperature: number
+    # Moon 3D model information
+    attributes:
+        heightMap1: integer
+        heightMap2: integer
+        shaderPreset: integer
+
+
+## SDE File: mapPlanet.jsonl mapPlanet.yaml
+
+# Planet
+Planet:
+    # ID for this planet
+    !!key planetID: PlanetID (integer)
+    # Unique name of this planet. If absent, uses generated name. See [`Planet::name()`]
+    uniqueName?: LocalizedString
+    # [`AsteroidBelt`]s orbiting this planet
+    asteroidBeltIDs?: [ AsteroidBeltID (integer) ]
+    # NPC stations orbiting this planet
+    npcStationIDs?: [ StationID (integer) ]
+    # [`Moon`]s orbiting this planet
+    moonIDs?: [ MoonID (integer) ]
+    # Planet 3D model information
+    attributes:
+        heightMap1: integer
+        heightMap2: integer
+        population: boolean
+        shaderPreset: integer
+    # Index of this planet, starting at 1 for the first planet
+    celestialIndex: integer
+    # CelestialID (StarID) of the star this moon orbits
+    orbitID?: ItemID (integer)
+    # In-system position of this planet
+    position: CelestialPosition
+    # Planet radius
+    radius: number
+    # Solarsystem this planet is located in
+    solarSystemID: SolarSystemID (integer)
+    # Additional celestial information for this planet
+    statistics:
+        density: number
+        eccentricity: number
+        escapeVelocity: number
+        locked: boolean
+        massDust: number
+        massGas?: number
+        pressure: number
+        orbitPeriod?: number
+        orbitRadius?: number
+        rotationRate: number
+        spectralClass: string
+        surfaceGravity?: number
+        temperature: number
+    # TypeID for planet object
+    typeID: TypeID (integer)
+
+
+## SDE File: mapRegions.jsonl mapRegions.yaml
+
+# Region of constellations
+Region:
+    # ID for this region
+    !!key regionID: RegionID (integer)
+    # Name of this region
+    name: LocalizedString
+    # Description for this region, shown in-game in the showinfo menu
+    description?: LocalizedString
+    # Constellations in this region
+    constellationIDs: [ ConstellationID (integer) ]
+    # Faction holding this region
+    # 
+    # May be overridden by factionID values in [`Constellation`] or [`SolarSystem`]
+    factionID?: FactionID (integer)
+    # Background skybox nebula for this region
+    nebulaID: integer
+    # Position of this region (approximate but not exact center), relative to the map origin
+    position: MapPosition
+    # Wormhole class of this region
+    # 
+    # May be overridden by wormholeClassID values in [`Constellation`] or [`SolarSystem`]
+    wormholeClassID?: WormholeClassID (integer)
+
+
+## SDE File: mapSecondarySuns.jsonl mapSecondarySuns.yaml
+
+# Wormhole effect "2nd star" (Red Giant, Magnetar, etc)
+# 
+# Consists of both a star object and an effect beacon. The star object is the same for all wormholes of the same type, while the effect beacon differs with the class and type of the wormhole.
+SecondarySun:
+    # CelestialID for the star object
+    !!key celestialID: ItemID (integer)
+    # TypeID of the effect beacon
+    effectBeaconTypeID: TypeID (integer)
+    # TypeID of the star object
+    typeID: TypeID (integer)
+    # Position of the star object
+    position: CelestialPosition
+    # Solarsystem this effect applies to
+    solarSystemID: SolarSystemID (integer)
+
+
+## SDE File: mapSolarSystems.jsonl mapSolarSystems.yaml
+
+# Solarsystem, a single in-game star system
+# 
+# Terminology note: "SolarSystem" is the term for star systems within EVE Online third party development. Players usually use the term "system"
+SolarSystem:
+    # ID for this solarsystem
+    !!key solarSystemID: SolarSystemID (integer)
+    # Constellation this solarsystem is a part of
+    constellationID: ConstellationID (integer)
+    # Region this solarsystem is a part of
+    regionID: RegionID (integer)
+    # Item-type [`Category`]-ies that cannot be anchored in this system
+    disallowedAnchorCategories?: [ CategoryID (integer) ]
+    # Item-type [`Groups`]s that cannot be anchored in this system
+    disallowedAnchorGroups?: [ GroupID (integer) ]
+    # Faction holding this solarsystem
+    # 
+    # If `None`, Faction holdings should be inherited from [`Constellation::factionID`] and [`Region::factionID`]
+    factionID?: FactionID (integer)
+    # Solarsystem name
+    name: LocalizedString
+    # [`Planet`]s in this system
+    planetIDs?: [ PlanetID (integer) ]
+    # [`Stargate`]s in this system
+    stargateIDs?: [ StargateID (integer) ]
+    # (3D) position of this solarsystem
+    # 
+    # See https://developers.eveonline.com/docs/guides/map-data/
+    position: MapPosition
+    # Position of this solarsystem on the 2D map. Only the k-space systems have a 2d position
+    # 
+    # See https://developers.eveonline.com/docs/guides/map-data/
+    position2D?: Position2D
+    # Solarsystem radius
+    # 
+    # Caution: Does not reflect actual in-system size
+    radius: number
+    securityClass?: string
+    # Numerical security status,
+    securityStatus: number
+    # [`Star`] of this solarsystem; Only certain special event or instance-host systems do not have a star. All regular k-space and wh-space systems have stars.
+    starID?: StarID (integer)
+    # Star luminosity
+    luminosity?: number
+    # Additional visual effect for this system
+    visualEffect?: string
+    # Whether this solarsystem counts as a border system
+    border?: boolean
+    # Whether this solarsystem counts as a corridor system
+    corridor?: boolean
+    # Whether this solarsystem counts as a fringe system
+    fringe?: boolean
+    # Whether this solarsystem counts as a hub system
+    hub?: boolean
+    # Whether this solarsystem counts as an international system
+    international?: boolean
+    # Whether this solarsystem counts as an regional system
+    regional?: boolean
+    # Wormhole class for this solarsystem
+    # 
+    # If `None`, WH class should be inherited from [`Constellation::wormholeClassID`] and [`Region::wormholeClassID`]
+    wormholeClassID?: WormholeClassID (integer)
+
+
+## SDE File: mapStargates.jsonl mapStargates.yaml
+
+# Stargate connecting systems
+# 
+# Each connection has two entries, one for the stargate in each system.
+# 
+# Does not include player-built "Ansiblex" jump bridges
+Stargate:
+    # ID for this stargate
+    !!key stargateID: StargateID (integer)
+    # Solarsystem this stargate is in
+    solarSystemID: SolarSystemID (integer)
+    # Destination of stargate
+    # 
+    # Contains both the paired `StargateID` and destination `SolarSystemID`
+    destination:
+        solarSystemID: SolarSystemID (integer)
+        stargateID: StargateID (integer)
+    # In-system position of this stargate
+    position: CelestialPosition
+    # TypeID for stargate object
+    typeID: TypeID (integer)
+
+
+## SDE File: mapStars.jsonl mapStars.yaml
+
+# Star
+# 
+# most but not all systems have a central star
+Star:
+    # ID for this star
+    !!key starID: StarID (integer)
+    # Star radius
+    radius: number
+    # Solarsystem this star is in
+    solarSystemID: SolarSystemID (integer)
+    # Additional celestial information for this star
+    statistics:
+        age: number
+        life: number
+        luminosity: number
+        spectralClass: string
+        temperature: number
+    # TypeID of this star
+    typeID: TypeID (integer)
+
+
+## SDE File: marketGroups.jsonl marketGroups.yaml
+
+# Market group
+# 
+# Market groups form a hierarchical tree, with child-groups having their "parentGroupID" field set to the marketGroupID of their parent.
+# 
+# All items on the market have a market group
+MarketGroup:
+    # ID for this market group
+    !!key marketGroupID: MarketGroupID (integer)
+    # Name, as shown in the in-game market screen
+    name: LocalizedString
+    # Description, shown in-game when hovering over the group name in the market screen
+    description?: LocalizedString
+    # Icon, as shown in the in-game market screen
+    iconID?: IconID (integer)
+    # Whether this market group is assigned to item [`Type`]s or is merely a parent group of other market groups
+    hasTypes: boolean
+    # Parent market group
+    parentGroupID?: MarketGroupID (integer)
+
+
+## SDE File: masteries.jsonl masteries.yaml
+
+# Ship mastery info
+MasteryInfo:
+    # Certificates required to reach level 1 mastery
+    # 
+    # Certificates must be at 'basic' level
+    lvl1: [ CertificateID (integer) ]
+    # Certificates required to reach level 2 mastery
+    # 
+    # Certificates must be at 'standard' level
+    lvl2: [ CertificateID (integer) ]
+    # Certificates required to reach level 3 mastery
+    # 
+    # Certificates must be at 'improved' level
+    lvl3: [ CertificateID (integer) ]
+    # Certificates required to reach level 4 mastery
+    # 
+    # Certificates must be at 'advanced' level
+    lvl4: [ CertificateID (integer) ]
+    # Certificates required to reach level 5 mastery
+    # 
+    # Certificates must be at 'elite' level
+    lvl5: [ CertificateID (integer) ]
+
+
+## SDE File: mercenaryTacticalOperations.jsonl mercenaryTacticalOperations.yaml
+
+# Mercendary den event
+MercenaryTacticalOperation:
+    # ID for this operation
+    !!key operation_id: DungeonID (integer)
+    # Anarchy score modifier if this event is successfully completed
+    anarchyImpact: integer
+    # Development score modifier if this event is successfully completed
+    developmentImpact: integer
+    # Infomorph production modifier if this event is successfully completed
+    infomorphBonus: integer
+    # [`Dungeon`] to which this event applies
+    dungeonID: DungeonID (integer)
+    # Operation name
+    name: LocalizedString
+    # Operation description
+    description: LocalizedString
+
+
+## SDE File: metaGroup.jsonl metaGroup.yaml
+
+# Metagroup or "tech tier" for [`Type`]s
+MetaGroup:
+    # ID for this metagroup
+    !!key metaGroupID: MetaGroupID (integer)
+    # Name (As shown in-game when hovering over the tech-tier icon)
+    name: LocalizedString
+    # Description
+    description?: LocalizedString
+    # Associated colour
+    color?:
+        # Red channel, in range 0-1
+        r: number
+        # Green channel, in range 0-1
+        g: number
+        # Blue channel, in range 0-1
+        b: number
+    # IconID for the corner icon displayed on type icons
+    iconID?: IconID (integer)
+    # Icon suffix
+    iconSuffix?: string
+
+
+## SDE File: npcCharacters.jsonl npcCharacters.yaml
+
+# NPC character
+NpcCharacter:
+    # CharacterID for this NPC
+    !!key characterID: CharacterID (integer)
+    # Character name
+    name: LocalizedString
+    # NPC/Character "bio"
+    description?: string
+    # NPC race
+    raceID: RaceID (integer)
+    # Bloodline for this npc
+    bloodlineID: BloodlineID (integer)
+    # Ancestry for this npc (Optional)
+    ancestryID?: AncestryID (integer)
+    # Corporation this npc is in
+    corporationID: CorporationID (integer)
+    # NPC gender
+    gender: !!oneOf(string)
+      - Male
+      - Female
+    # Character career
+    careerID?: CareerID (integer)
+    # True if this NPC is a CEO
+    ceo: boolean
+    # NPC location
+    locationID?: LocationID (integer)
+    # NPC school
+    schoolID?: SchoolID (integer)
+    # Skills this NPC has
+    skills?: [ TypeID (integer) ]
+    # NPC speciality
+    specialityID?: SpecialtyID (integer)
+    # NPC corporation start date
+    startDate?: string
+    # True if this NPC has a non-generated name
+    # 
+    # No specific meaning as NPCs always have their names specified in the `name` field
+    uniqueName: boolean
+    # Additional agent-specific information if this character is an agent
+    agent?:
+        # Agent type
+        agentTypeID: AgentTypeID (integer)
+        # Agent's corporation division
+        divisionID: DivisionID (integer)
+        # Whether this agent is a locator agent
+        isLocator: boolean
+        # Agent level
+        level: integer
+
+
+## SDE File: npcCorporationDivisions.jsonl npcCorporationDivisions.yaml
+
+# Division of an NPC corporation
+CorporationDivision:
+    # ID for this division
+    !!key divisionID: DivisionID (integer)
+    # Division name, localized
+    name: LocalizedString
+    # Division name (English, unsuitable for end-user display)
+    displayName?: string
+    # Division description
+    description?: LocalizedString
+    # Short internal-use name, in english
+    internalName: string
+    # Job description for division leader
+    leaderTypeName: LocalizedString
+
+
+## SDE File: npcCorporations.jsonl npcCorporations.yaml
+
+# NPC corporation
+NpcCorporation:
+    # ID for this corporation
+    !!key corporationID: CorporationID (integer)
+    # Corporation name
+    name: LocalizedString
+    # Corporation ticker
+    tickerName: string
+    # Corporation description/bio
+    description?: LocalizedString
+    # Corporation icon
+    iconID?: IconID (integer)
+    # Whether this corporation has been deleted (inaccessible in-game)
+    deleted: boolean
+    # Corporation CEO
+    ceoID?: CharacterID (integer)
+    # Character races allowed in this corporation
+    # 
+    # Not applicable as players cannot join NPC corporations other than the school/default one
+    allowedMemberRaces?: [ RaceID (integer) ]
+    # Corporation trades
+    corporationTrades?: { TypeID (integer): number }
+    # Divisions of this corporation
+    divisions?: {
+        DivisionID (integer):
+            # Division number within the corporation, starting at 1
+            divisionNumber: integer
+            # Leader of this division
+            leaderID: CharacterID (integer)
+            # ???
+            size: integer
+    }
+    # Faction this corporation is a part of
+    factionID?: FactionID (integer)
+    # Primary enemy for Fwar corporations, or "lore" competitor for other corporations
+    enemyID?: CorporationID (integer)
+    # Primary ally for Fwar corporations, or "lore" business partner for other corporations
+    friendID?: CorporationID (integer)
+    # ???
+    exchangeRates?: { CorporationID (integer): number }
+    # ???
+    extent: string
+    # ???
+    size: string
+    # ???
+    sizeFactor?: number
+    # ??? Used only for CCP admin corporations
+    hasPlayerPersonnelManager: boolean
+    # ???
+    initialPrice: number
+    # Current shareholders (Other NPC corps, lore information?)
+    investors?: { CorporationID (integer): integer }
+    # Loyalty point trades offered by this company
+    # 
+    # The table numbers are currently meaningless to third party developers. Corporation LP trades can be obtained through ESI based on the corporationID
+    # https://developers.eveonline.com/api-explorer#/operations/GetLoyaltyStoresCorporationIdOffers
+    lpOfferTables?: [ integer ]
+    # main [`CorporationActivity`]
+    mainActivityID?: CorporationActivityID (integer)
+    # secondary [`CorporationActivity`]
+    secondaryActivityID?: CorporationActivityID (integer)
+    # Corporation member limit
+    memberLimit: integer
+    # Minimum security
+    minSecurity: number
+    # Minimum standing to join (unused)
+    minimumJoinStanding: number
+    # Corporation's raceID
+    raceID?: RaceID (integer)
+    # Issued shares of this corporation (NPC shares are unused)
+    shares: 64-bit long integer
+    # Home system of this corporation
+    solarSystemID?: SolarSystemID (integer)
+    # Home station of this corporation
+    stationID?: StationID (integer)
+    # Corporation tax rate (primarily relevant for the starter NPC corps that players join)
+    taxRate: number
+    # Whether this corporation uses a unique or generated name, irrelevant as corporations always have a name specified
+    uniqueName: boolean
+    # Whether joining this corporation sends the character termination message; Deleted characters are added to the 'Doomheim' corporation
+    # 
+    # Also true for several other NPC corporations, it is best to rely on the Doomheim corpID instead (`1000001`)
+    sendCharTerminationMessage: boolean
+
+
+## SDE File: npcStations.jsonl npcStations.yaml
+
+# NPC station, not to be confused with player built Citadels/Upwell Structures, or now-removed "Outposts" & "Conquerable Stations"
+# 
+# For station services, see [`StationOperation::services`]
+# 
+# For station descriptions, see [`StationOperation::description`]
+NpcStation:
+    # ID for this station
+    !!key stationID: StationID (integer)
+    # Station owner
+    ownerID: CorporationID (integer)
+    # Solarsystem this station is in
+    solarSystemID: SolarSystemID (integer)
+    # Station object typeID (determines model & undocks)
+    typeID: TypeID (integer)
+    # Whether this station includes the operation in the name. Use [`NpcStation::name()`] to acquire name
+    useOperationName: boolean
+    # CelestialID of the orbited moon
+    orbitID: ItemID (integer)
+    # Index the orbited moon within the planet, starting at 1. As shown in the name of "[planet] - Moon N" in-game.
+    # 
+    # Equal to the [`Moon`]'s own `orbitIndex`
+    orbitIndex?: integer
+    # Index of the orbited planet, starting at 1 for the first planet
+    celestialIndex?: integer
+    # Station's [`StationOperation`];
+    operationID: StationOperationID (integer)
+    # Station position within solarsystem
+    position: CelestialPosition
+    # Station reprocessing efficiency
+    reprocessingEfficiency: number
+    # ??? This is always invFlag 4; "Hangar"
+    reprocessingHangarFlag: integer
+    # Station reprocessing tax (unused?)
+    reprocessingStationsTake: number
+
+
+## SDE File: planetResources.jsonl planetResources.yaml
+
+# Planet sov resource
+PlanetResource:
+    # PlanetID to which this resource info applies
+    !!key planet_id: PlanetID (integer)
+    # Amount of power this planet provides if a Skyhook is installed
+    power?: integer
+    # Amount of workforce this planet provides if a Skyhook is installed
+    workforce?: integer
+    # Reagent this planet provides if a Skyhook is installed
+    reagent?:
+        # Reagent typeID
+        type_id: TypeID (integer)
+        # Amount of reagent provided per cycle
+        amount_per_cycle: integer
+        # Cycle period in seconds
+        cycle_period: integer
+        # Secured capacity; Amount of reagent that is stored in the "secured" bay
+        # 
+        # The per-cycle yield is split 50/50 between the secured and unsecured bays
+        secured_capacity: 64-bit long integer
+        # Unsecured capacity; Amount of reagent that is stored in the "unsecured" bay and can be stolen
+        # 
+        # The per-cycle yield is split 50/50 between the secured and unsecured bays
+        unsecured_capacity: 64-bit long integer
+
+
+## SDE File: planetSchematics.jsonl planetSchematics.yaml
+
+# Planetary industry schematic
+PlanetSchematic:
+    # ID for this schematic
+    !!key schematicID: PlanetSchematicID (integer)
+    # Schematic name
+    name: LocalizedString
+    # Cycle time in seconds
+    cycleTime: integer
+    # Planetary industry facilities at which this schematic may be used
+    # 
+    # (Named "pins" for their visual similarity to a push-pin/tack put into the planet)
+    pins: [ TypeID (integer) ]
+    # Input-output types
+    types: {
+        TypeID (integer):
+            # True if this type is an input to the [`PlanetarySchematic`]
+            isInput: boolean
+            # Quantity required for one [`PlanetarySchematic`] cycle
+            quantity: integer
+    }
+
+
+## SDE File: races.jsonl races.yaml
+
+# NPC or player character race
+CharacterRace:
+    # ID for this character race
+    !!key raceID: RaceID (integer)
+    # Race name
+    name: LocalizedString
+    # Description, shown in character-creation
+    description?: LocalizedString
+    # Race icon
+    iconID?: IconID (integer)
+    # "Rookie Ship" / Corvette for player characters of this race
+    shipTypeID?: TypeID (integer)
+    # "Default" skills all players characters of this race already have upon starting the game
+    skills?: { TypeID (integer): SkillLevel (integer [1, 5]) }
+
+
+## SDE File: skinLicenses.jsonl skinLicenses.yaml
+
+# Skin license item
+SkinLicense:
+    # TypeID of the license item
+    # 
+    # Equal to `licenseTypeID`
+    !!key typeID: TypeID (integer)
+    # TypeID of the license item
+    # 
+    # Equal to `typeID`
+    licenseTypeID: TypeID (integer)
+    # Skin duration, -1 for permanent skins
+    duration: integer
+    # [`Skin`] this license is for
+    skinID: SkinID (integer)
+    # Whether skin is a "single use" (default if unspecified). Unused value
+    isSingleUse?: boolean
+
+
+## SDE File: skinMaterials.jsonl skinMaterials.yaml
+
+# Skin material; The design & colours of a skin, shared between multiple ships
+SkinMaterial:
+    # ID for this material
+    !!key materialID: SkinMaterialID (integer)
+    # Name for this material; Name of the skin line/series.
+    displayName?: LocalizedString
+    # Graphics info material-set, not to be confused with `materialID` which identifies this SkinMaterial
+    materialSetID: MaterialSetID (integer)
+
+
+## SDE File: skins.jsonl skins.yaml
+
+# Ship skin, not to be confused with a [`SkinLicense`] item
+Skin:
+    # ID for this skin
+    !!key skinID: SkinID (integer)
+    # Non-displayed name for this skin. See [`SkinMaterial::displayName`] for a skin's displayname
+    internalName: string
+    # Description for this skin line
+    skinDescription?: LocalizedString
+    # [`SkinMaterial`] for this skin line
+    skinMaterialID: SkinMaterialID (integer)
+    # Applicable ship (or structure) types
+    types: [ TypeID (integer) ]
+    # Whether this skin is visible on the Serenity (Chinese) server
+    visibleSerenity: boolean
+    # Whether this skin is visible on the Tranquility server
+    visibleTranquility: boolean
+    # Whether this skin is a structure skin
+    isStructureSkin?: boolean
+    # CCP-specific field
+    allowCCPDevs: boolean
+
+
+## SDE File: sovereigntyUpgrades.jsonl sovereigntyUpgrades.yaml
+
+# Sovereignty Upgrade for use with the Sovereignty Hub
+SovereigntyUpgrade:
+    # TypeID for sov-upgrade item
+    !!key typeID: TypeID (integer)
+    # Exclusivity group; Multiple upgrades with the same group cannot be installed at the same time
+    mutually_exclusive_group: string
+    # Power consumption of this upgrade
+    power_allocation?: integer
+    # Workforce requirement of this upgrade
+    workforce_allocation?: integer
+    # Power production of this upgrade
+    power_production?: integer
+    # Workforce production of this upgrade
+    workforce_production?: integer
+    # Additional fuel required by this upgrade
+    fuel?:
+        # Fuel typeID
+        type_id: TypeID (integer)
+        # Upgrade onlining cost
+        startup_cost: integer
+        # Upgrade upkeep cost, per hour
+        hourly_upkeep: integer
+
+
+## SDE File: stationOperations.jsonl stationOperations.yaml
+
+# [`NpcStation`] operation
+StationOperation:
+    # ID for this operation
+    !!key operationID: StationOperationID (integer)
+    # [`CorporationActivity`] this operation is a part of
+    activityID: CorporationActivityID (integer)
+    # Name for this operation (Shown in station names)
+    operationName: LocalizedString
+    # Description for this operation (Shown in station descriptions)
+    description?: LocalizedString
+    # Available [`StationService`]s at this station
+    services: [ StationServiceID (integer) ]
+    # Station object typeID (determines model & undocks), per character race/faction.
+    # 
+    # Only provided for the 4 major factions and Jove.
+    stationTypes?: { RaceID (integer): TypeID (integer) }
+    # ???
+    border: number
+    # ???
+    corridor: number
+    # ???
+    fringe: number
+    # ???
+    hub: number
+    # ???
+    ratio: number
+    # ???
+    manufacturingFactor: number
+    # ???
+    researchFactor: number
+
+
+## SDE File: stationServices.jsonl stationServices.yaml
+
+# [`NpcStation`] service
+StationService:
+    # ID for this service
+    !!key serviceID: StationServiceID (integer)
+    # Display name for this service
+    serviceName: LocalizedString
+    # Service description
+    description?: LocalizedString
+
+
+## SDE File: translationLanguages.jsonl translationLanguages.yaml
+
+# A language the game officially is translated for
+# 
+# This SDE library handles translated strings through the [`LocalizedString`] type
+TranslationLanguage:
+    # Short name (ISO 639 code)
+    !!key shortName: string
+    # Full name
+    name: string
+
+
+## SDE File: typeBonus.jsonl typeBonus.yaml
+
+# Ship & effect beacon bonuses
+TypeBonuses:
+    # Item [`Type`] this bonus info is for
+    !!key typeID: TypeID (integer)
+    # Icon for projected bonuses (e.g. Incursion or wormhole effects)
+    iconID?: IconID (integer)
+    # Skill bonuses, per level
+    # 
+    # Displayed first
+    types?: [
+        # Bonus importance
+        importance: integer
+        # Bonus text
+        # 
+        # NOTE: This contains EVE-HTML markup, and needs processing before being suitable for display
+        bonusText: LocalizedString
+        # Bonus amount, percentage
+        bonus?: number
+        # Bonus [`EVEUnit`]
+        unitID?: UnitID (integer)
+        # Whether this bonus is considered beneficial (Used primarily for effect beacons, which may have detrimental effects)
+        isPositive?: boolean
+    ]
+    # Misc bonuses, used for effect beacons and T3 Destroyers
+    # 
+    # Currently mutually exclusive with role bonuses, displayed after skill bonuses
+    miscBonuses?: [
+        # Bonus importance
+        importance: integer
+        # Bonus text
+        # 
+        # NOTE: This contains EVE-HTML markup, and needs processing before being suitable for display
+        bonusText: LocalizedString
+        # Bonus amount, percentage
+        bonus?: number
+        # Bonus [`EVEUnit`]
+        unitID?: UnitID (integer)
+        # Whether this bonus is considered beneficial (Used primarily for effect beacons, which may have detrimental effects)
+        isPositive?: boolean
+    ]
+    # Ship role bonuses
+    # 
+    # Currently mutually exclusive with misc bonuses, displayed after skill bonuses
+    roleBonuses?: [
+        # Bonus importance
+        importance: integer
+        # Bonus text
+        # 
+        # NOTE: This contains EVE-HTML markup, and needs processing before being suitable for display
+        bonusText: LocalizedString
+        # Bonus amount, percentage
+        bonus?: number
+        # Bonus [`EVEUnit`]
+        unitID?: UnitID (integer)
+        # Whether this bonus is considered beneficial (Used primarily for effect beacons, which may have detrimental effects)
+        isPositive?: boolean
+    ]
+
+
+## SDE File: typeDogma.jsonl typeDogma.yaml
+
+# Dogma information for a [`Type`]
+TypeDogma:
+    # Applicable type
+    !!key typeID: TypeID (integer)
+    # Type's attributes
+    # 
+    # Map of attributeID and attribute value
+    dogmaAttributes: { AttributeID (integer): number }
+    # Type's effects
+    # 
+    # Map of effectID and whether or not the effect is set as "isDefault". (Meaning of "isDefault" not documented here)
+    dogmaEffects?: { EffectID (integer): boolean }
+
+
+## SDE File: typeLists.jsonl typeLists.yaml
+
+# TypeList; List of types
+TypeList:
+    # ID for this type list
+    typeListID: TypeID (integer)
+    # Display Name for this typeList (as used in-game, such as "Common Ores")
+    displayName?: LocalizedString
+    # Display Description for this typeList (as used in-game, such as "<b>Tech 1</b> and empire faction <b>Navy</b> ships of <b>Battleship size or smaller</b>." for acceleration gate restrictions)
+    displayDescription?: LocalizedString
+    # "Developer" name
+    name: string
+    # Included typeIDs, may be overridden by excluded typeIDs
+    includedTypeIDs?: [ TypeID (integer) ]
+    # Excluded typeIDs, overrides included typeIDs
+    excludedTypeIDs?: [ TypeID (integer) ]
+    # Included groupIDs, may be overridden by excluded groupIDs
+    includedGroupIDs?: [ GroupID (integer) ]
+    # Excluded groupIDs, overrides included groupIDs
+    excludedGroupIDs?: [ GroupID (integer) ]
+    # Included categoryIDs, may be overridden by excluded categoryIDs
+    includedCategoryIDs?: [ CategoryID (integer) ]
+    # Excluded categoryIDs, overrides included categoryIDs
+    excludedCategoryIDs?: [ CategoryID (integer) ]
+
+
+## SDE File: typeMaterials.jsonl typeMaterials.yaml
+
+# Type reprocessing output
+# 
+# To reprocess an item, a stack of [`Type::portionSize`] units is required
+TypeMaterials:
+    # Input/reprocessed typeID
+    !!key typeID: TypeID (integer)
+    # Output materials
+    materials?: [
+        # Result output [`Type`]
+        materialTypeID: TypeID (integer)
+        # Output quantity in units, per [`Type::portionSize`] of input materials
+        quantity: integer
+    ]
+    # Output materials subject to random selection
+    # 
+    # Reprocessing will yield one of these materials, with a quantity between [`TypeRandomMaterial::quantityMin`] and [`TypeRandomMaterial::quantityMax`]
+    randomizedMaterials?: [
+        # Result output [`Type`]
+        materialTypeID: TypeID (integer)
+        # Maximum quantity, per [`Type::portionSize`] of input materials
+        quantityMax: integer
+        # Minimum quantity, per [`Type::portionSize`] of input materials
+        quantityMin: integer
+    ]
+
+
+## SDE File: types.jsonl types.yaml
+
+# Item type
+Type:
+    # ID for this type
+    !!key typeID: TypeID (integer)
+    # [`Group`] this type belongs to
+    groupID: GroupID (integer)
+    # Item type name
+    # 
+    # Name for the "packaged"/stackable items. Certain items like assembled ships have unique names for each instance
+    name: LocalizedString
+    # Item description
+    description?: LocalizedString
+    # Cargo capacity, in m³
+    capacity?: number
+    # Meta group; Tech tier of this item. Defaults to `1` or "Tech 1" if unspecified.
+    metaGroupID?: MetaGroupID (integer)
+    # Meta level; Ordinal ranking of types
+    metaLevel?: MetaLevel (integer)
+    # Marketgroup for this type. `None` indicates this type cannot be sold on the market, but may possibly be sold through contracts
+    marketGroupID?: MarketGroupID (integer)
+    # Variant type "parent"; The basic tier 1 version of this module/ship/etc.
+    # 
+    # The parent itself has no field to identify it as a parent or having variants
+    variationParentTypeID?: TypeID (integer)
+    # Item's faction. Used for e.g. ships and drones
+    factionID?: FactionID (integer)
+    # Item's associated character race. Used for e.g. ships and drones
+    raceID?: RaceID (integer)
+    # Base "standard" price. Affects seeded items (blueprints, skillbooks, etc) pricing
+    basePrice?: number
+    # 2D Item [`Icon`]
+    # 
+    # Certain items (ships, drones, anything with a 3D model) do not have a 2D icon and use a rendered image derived from the graphicID instead
+    iconID?: IconID (integer)
+    # 3D model information, see [`Graphic`]
+    graphicID?: GraphicID (integer)
+    # Item volume in m³
+    # 
+    # This is the assembled volume for ships/etc. Packaged volumes are currently unavailable through the SDE.
+    volume?: number
+    # Item mass in kg
+    # 
+    # Mainly used for wormhole transit and jump portal fuel calculations
+    mass?: number
+    # Item radius
+    # 
+    # Used for e.g. ship collisions
+    radius?: number
+    # Reprocessing batch size
+    # 
+    # Reprocessing output is available through [`TypeMaterials`]
+    portionSize: integer
+    # Whether this type is set as visible in-game
+    published: boolean
+    # Type sounds
+    # 
+    # soundID is not currently useful for third party developers as information about sounds is not made available
+    soundID?: SoundID (integer)
+

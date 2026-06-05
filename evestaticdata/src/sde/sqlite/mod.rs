@@ -1,3 +1,7 @@
+//! Functions for converting the Static Data Export to an SQLite format
+//! Broadly follows community standard database schema
+//! Exact schema subject to change, use an established conversion if you require consistent schema
+
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};

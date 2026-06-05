@@ -4,7 +4,7 @@ use std::collections::hash_map::Keys;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
@@ -28,6 +28,7 @@ pub enum CacheError {
     /// JSON parsing error, usually indicates out-of-date library
     JSON(serde_json::Error),
     /// The requested resource is not known in the sharedcache
+    ///
     /// If using [`CacheReader`], ensure the game install is up-to-date and set to "download full game client"
     ResourceNotFound(String),
 }
@@ -96,20 +97,22 @@ impl IndexEntry {
             if line.trim().is_empty() {
                 continue;
             }
-            // skip 6th field, which are the filesystem permissions
-            let [resource, path, md5, size, compressed] = line.splitn(6, ',')
-                .next_chunk()
-                .map_err(|_| CacheError::MalformedIndexFile)?;
 
-            index.insert(
-                resource.replace('\\', "/").to_ascii_lowercase(),
-                IndexEntry {
-                    path: path.to_string(),
-                    md5: md5.to_string(),
-                    size: u64::from_str(size).map_err(|_| CacheError::MalformedIndexFile)?,
-                    compressed: u64::from_str(compressed).map_err(|_| CacheError::MalformedIndexFile)?,
-                }
-            );
+            // skip 6th field, which are the filesystem permissions
+            let mut split = line.splitn(6, ',');
+            if let (Some(resource), Some(path), Some(md5), Some(size), Some(compressed)) = (split.next(), split.next(), split.next(), split.next(), split.next()) {
+                index.insert(
+                    resource.replace('\\', "/").to_ascii_lowercase(),
+                    IndexEntry {
+                        path: path.to_string(),
+                        md5: md5.to_string(),
+                        size: u64::from_str(size).map_err(|_| CacheError::MalformedIndexFile)?,
+                        compressed: u64::from_str(compressed).map_err(|_| CacheError::MalformedIndexFile)?,
+                    }
+                );
+            } else {
+                return Err(CacheError::MalformedIndexFile);
+            }
         }
 
         Ok(())
@@ -130,8 +133,15 @@ pub trait SharedCache {
     /// for [`CacheReader`] this returns true if a resource is listed in the index file but not yet downloaded by the game launcher
     fn has_resource(&self, resource: &str) -> bool;
     /// Retrieves the bytes of a resource
+    ///
     /// for [`CacheDownloader`] downloads if necessary
     fn fetch(&self, resource: &str) -> Result<Vec<u8>, CacheError>;
+    /// Retrieves the bytes of a resource, if extant.
+    ///
+    /// Returns `Ok(None)` for non-extant resources
+    ///
+    /// for [`CacheDownloader`] downloads if necessary
+    fn try_fetch(&self, resource: &str) -> Result<Option<Vec<u8>>, CacheError>;
     /// Retrieves the local-system path of a resource, may be a local or absolute path
     /// for [`CacheDownloader`] downloads if necessary
     fn path_of(&self, resource: &str) -> Result<PathBuf, CacheError>;
@@ -213,6 +223,21 @@ impl SharedCache for CacheReader {
         }
     }
 
+    fn try_fetch(&self, resource: &str) -> Result<Option<Vec<u8>>, CacheError> {
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
+        let path = if let Some(IndexEntry { path, .. }) = self.index.get(&resource) {
+            self.res_dir.join(path)
+        } else {
+            return Ok(None);
+        };
+
+        if fs::exists(&path)? {
+            Ok(Some(fs::read(path)?))
+        } else {
+            Err(CacheError::ResourceNotFound(resource))
+        }
+    }
+
     fn path_of(&self, resource: &str) -> Result<PathBuf, CacheError> {
         let resource = resource.to_ascii_lowercase().replace('\\', "/");
         let path = if let Some(IndexEntry { path, .. }) = self.index.get(&resource) {
@@ -251,14 +276,14 @@ impl CacheDownloader {
     /// # Arguments
     ///
     /// * `directory`: Directory for local caching of downloaded files, created if not existing
-    /// * `use_macos_build`: If true, download macOS build of the game, if false, download windows files
+    /// * `use_macos_build`: If true, download macOS build of the game, if false, download Windows files
     /// * `user_agent`: User Agent to use with HTTP requests
     ///
     /// returns: Result<CacheDownloader, CacheError>
     pub fn initialize<T: Into<PathBuf>>(directory: T, use_macos_build: bool, user_agent: &str) -> Result<CacheDownloader, CacheError> {
         let cache_dir = directory.into();
         fs::create_dir_all(&cache_dir)?;
-        let http_client = reqwest::blocking::Client::builder().user_agent(user_agent).build()?;
+        let http_client = reqwest::blocking::Client::builder().user_agent(format!("{} turtletools:{}/{} +{}", user_agent, crate::CRATE_NAME, crate::CRATE_VERSION, crate::CRATE_REPO)).build()?;
 
         if fs::exists(cache_dir.join("updater.exe"))? || fs::exists(cache_dir.join("tq"))? {
             return Err(CacheError::DownloadIntoGameInstall);
@@ -379,7 +404,20 @@ impl CacheDownloader {
                         if let Some(index_entry) = path_map.get(&*resource_path) {
                             let mut md5 = Md5::new();
 
-                            std::io::copy(&mut BufReader::new(File::open(&path)?), &mut md5)?;
+                            // Rustcrypto is being dumb and moved ::Write implementations to a whole separate crate. This isn't NPM >.>
+                            struct MD5Writer<'a>(&'a mut Md5);
+                            impl Write for MD5Writer<'_> {
+                                fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                                    Digest::update(self.0, buf);
+                                    Ok(buf.len())
+                                }
+
+                                fn flush(&mut self) -> io::Result<()> {
+                                    Ok(())
+                                }
+                            }
+
+                            std::io::copy(&mut BufReader::new(File::open(&path)?), &mut MD5Writer(&mut md5))?;
 
                             if u128::from_be_bytes(md5.finalize().into()) == u128::from_str_radix(&*index_entry.md5, 16).map_err(|_| CacheError::MalformedIndexFile)? {
                                 valid += 1;
@@ -457,6 +495,17 @@ impl SharedCache for CacheDownloader {
             self.fetch_file(self.cache_dir.join(path), format!("https://resources.eveonline.com/{}", path))
         } else {
             Err(CacheError::ResourceNotFound(resource))
+        }
+    }
+
+    fn try_fetch(&self, resource: &str) -> Result<Option<Vec<u8>>, CacheError> {
+        let resource = resource.to_ascii_lowercase().replace('\\', "/");
+        if let Some(IndexEntry { path, .. }) = self.app_index.get(&resource) {
+            self.fetch_file(self.cache_dir.join(path), format!("https://binaries.eveonline.com/{}", path)).map(Option::Some)
+        } else if let Some(IndexEntry { path, ..}) = self.res_index.get(&resource) {
+            self.fetch_file(self.cache_dir.join(path), format!("https://resources.eveonline.com/{}", path)).map(Option::Some)
+        } else {
+            Ok(None)
         }
     }
 

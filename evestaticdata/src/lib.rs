@@ -1,3 +1,6 @@
+#![cfg_attr(feature="docs_export", feature(proc_macro_hygiene))]
+#![cfg_attr(feature="docs_export", feature(custom_inner_attributes))]
+
 pub mod types;
 pub mod util;
 pub mod sde;

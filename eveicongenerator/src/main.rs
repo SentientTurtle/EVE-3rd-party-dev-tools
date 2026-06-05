@@ -2,6 +2,10 @@
 #![feature(iter_intersperse)]
 #![feature(iter_collect_into)]
 
+pub const CRATE_NAME: &'static str = env!("CARGO_PKG_NAME");
+pub const CRATE_VERSION: &'static str = env!("CARGO_PKG_VERSION");
+pub const CRATE_REPO: &'static str = env!("CARGO_PKG_REPOSITORY");
+
 use crate::icons::{IconBuildData, IconError, OutputMode};
 use crate::sde::update_sde;
 use evesharedcache::cache::CacheDownloader;
@@ -40,8 +44,15 @@ fn do_main() -> Result<(), IconError> {
                 .short('u')
                 .long("user_agent")
                 .help("User Agent for HTTP requests")
-                .required(true)
+                .required_unless_present("user_agent_file")
+                .conflicts_with("user_agent_file")
                 .value_parser(ValueParser::string()),
+            Arg::new("user_agent_file")
+                .long("user_agent_file")
+                .help("File containing User Agent for HTTP requests")
+                .required_unless_present("user_agent")
+                .conflicts_with("user_agent")
+                .value_parser(ValueParser::path_buf()),
             Arg::new("cache_folder")
                 .short('c')
                 .long("cache_folder")
@@ -303,7 +314,15 @@ fn do_main() -> Result<(), IconError> {
     let log_file = LOG_FILE.get();
     if let Some(mut log) = log_file { writeln!(log, "Icon generation run - {}", chrono::Local::now())?; }
 
-    let user_agent = arg_matches.get_one::<String>("user_agent").expect("user_agent is a required argument");
+    let mut user_agent = match (arg_matches.get_one::<String>("user_agent"), arg_matches.get_one::<PathBuf>("user_agent_file")) {
+        (Some(_), Some(_)) => unreachable!("Only one UA option may be set"),
+        (Some(ua), None) => ua.clone(),
+        (None, Some(ua_file)) => fs::read_to_string(ua_file).map_err(|err| IconError::String(format!("could not read User Agent file: {}", err)))?,
+        (None, None) => unreachable!("At least one UA option must be set"),
+    };
+
+    use std::fmt::Write;    // Write into string
+    write!(&mut user_agent, " turtletools:{}/{} +{}", CRATE_NAME, CRATE_VERSION, CRATE_REPO).expect("write into string should not fail!");
 
     let silent_mode = arg_matches.get_flag("silent"); // icons::build_icon_export overrides this to `true` if "checksum to stdout" is present
     let skip_if_fresh = arg_matches.get_flag("skip_if_fresh");
@@ -314,7 +333,7 @@ fn do_main() -> Result<(), IconError> {
     let cache = CacheDownloader::initialize(
         arg_matches.get_one::<PathBuf>("cache_folder").expect("cache_folder is a required argument"),
         false,
-        user_agent
+        &*user_agent
     )?;
     let cache_init_duration = start.elapsed();
 

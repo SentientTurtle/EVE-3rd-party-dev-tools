@@ -134,7 +134,7 @@ pub mod units {
             self as u32
         }
 
-        pub fn format(self, value: f64) -> String {
+        pub fn format(self, _value: f64) -> String {
             unimplemented!()
         }
     }

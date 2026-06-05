@@ -3,21 +3,16 @@ name = "eveicongenerator"
 version = "0.1.0"
 edition = "2024"
 publish = false
+repository = "https://github.com/SentientTurtle/EVE-3rd-party-dev-tools"
 
 [dependencies]
 evesharedcache = { path = "../evesharedcache" }
-reqwest = { version = "0.13.2", features = ["blocking"] }
-zip = "8.2.0"
-image = "0.25.5"
+reqwest = { version = "0.13.4", features = ["blocking"] }
+zip = "8.6.0"
+image = "0.25.10"
 image-blend = "0.1.7"
-clap = "4.5.29"
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.135"
-chrono = "0.4.39"
+clap = "4.6.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+chrono = "0.4.45"
 md5 = "0.8.0"
-
-# These are required for cross-compilation (windows -> linux), and may be omitted when compiling natively on linux
-[target.'cfg(target_os = "linux")'.dependencies]
-openssl = { version = '*', features = ["vendored"] }
-[target.'cfg(target_os = "linux")'.build-dependencies]
-openssl = { version = '*', features = ["vendored"] }

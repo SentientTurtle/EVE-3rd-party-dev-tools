@@ -6,12 +6,14 @@ publish = false
 repository = "https://github.com/SentientTurtle/EVE-3rd-party-dev-tools"
 
 [features]
-default = ["sde_load", "sde_update", "export_sqlite", "esi_async", "serde"]
+default = ["sde_load", "sde_update", "sde_diff", "esi_async", "serde"]
 sde_update = ["dep:reqwest", "reqwest/json", "reqwest/blocking", "dep:serde", "dep:serde_json"]
-sde_load = ["dep:zip", "dep:serde", "dep:serde_json"]
+sde_load = ["dep:zip", "dep:serde", "dep:serde_json", "dep:uuid", "uuid/serde"]
+sde_diff = ["sde_load", "dep:json-patch"]
 export_sqlite = ["dep:rusqlite"]
 serde = ["dep:serde", "dep:serde_repr", "indexmap/serde"]
 esi_async = ["dep:tokio", "dep:reqwest"]
+docs_export = ["dep:evestaticdata_macro"]
 
 [profile.test]
 inherits = "release"
@@ -23,9 +25,17 @@ reqwest = { version = "0.13.1", optional = true, features = ["native-tls"] }
 # Used for SDE parsing
 zip = { version = "8.3.0", optional = true }
 serde_repr = { version = "0.1.20", optional = true }
+uuid = { version = "1.23.2", optional = true }
 # Used for SDE exporting
 rusqlite = { version = "0.39.0", optional = true, features = ["bundled"] }
 # Used for 'serde' feature
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.149", optional = true }
+
 tokio = { version = "1.49.0", features = ["net", "time", "rt"], optional = true }
+
+# Used for 'sde_diff' feature
+json-patch = { version = "4.2.0", optional = true }
+
+# Used for 'docs-export' feature
+evestaticdata_macro = { path = "../evestaticdata-macro", optional = true }

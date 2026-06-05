@@ -1,5 +1,10 @@
+#![cfg_attr(feature="docs_export", evestaticdata_macro::doc_export)]
+
+#[cfg(feature="docs_export")]
+use evestaticdata_macro::doc_sde;
+
 use std::error::Error;
-use crate::types::{ids, values};
+use crate::types::{ids, uuids, values};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
@@ -147,6 +152,7 @@ struct ExplicitMapEntry<K, V> {
 /// See <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(common_type))]
 pub struct MapPosition {
     /// +X, East/Right
     pub x: f64,
@@ -161,6 +167,7 @@ pub struct MapPosition {
 /// See <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(common_type))]
 pub struct CelestialPosition {
     /// +X, West/Left
     pub x: f64,
@@ -175,6 +182,7 @@ pub struct CelestialPosition {
 /// Up/down, Left/right directions depend on context, see <https://developers.eveonline.com/docs/guides/map-data/> for detailed explanation
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(common_type))]
 pub struct Position2D {
     /// +X, East/Right
     pub x: f64,
@@ -185,10 +193,9 @@ pub struct Position2D {
 /// String with multiple language variants
 ///
 /// English is always available. Usually, all other languages are also available
-///
-/// [`try_*`] methods will return the specified-language version if present, or fall back to the english string.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(common_type))]
 pub struct LocalizedString {
     /// English
     pub en: String,
@@ -247,10 +254,36 @@ impl LocalizedString {
 
 // SDE data types
 
+/// Agent (Mission NPC) that is located in space, rather than docked in a station
+///
+/// Additional Agent information is contained in [`NpcCharacter`] data
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="agentsInSpace"))]
+pub struct AgentInSpace {
+    /// CharacterID for this agent
+    #[serde(rename="_key")]
+    pub agentID: ids::CharacterID,
+    /// 'Dungeon' within which the agent is located
+    ///
+    /// Data about dungeons is not available for EVE 3rd party developers
+    pub dungeonID: ids::DungeonID,
+    /// SolarSystem in which the Agent is located
+    pub solarSystemID: ids::SolarSystemID,
+    /// Spawnpoint for agent, no data available for EVE 3rd party developers
+    pub spawnPointID: ids::SpawnPointID,
+    /// TypeID of the agent's ship (Note: Agent Ships are not the same as the player-flyable ships, and have different TypeIDs)
+    pub typeID: ids::TypeID
+}
+
+impl_map_collect!(ids::CharacterID, AgentInSpace, agentID);
+
 /// The different kinds of agent
 ///
 /// See <https://wiki.eveuniversity.org/Agent#Category> for information about the various kinds of Agent
 #[derive(Debug, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub enum AgentType {
     NonAgent,
     BasicAgent,
@@ -286,46 +319,30 @@ impl Display for AgentType {
     }
 }
 
-/// Helper type for deserializing
+// Helper for deserializing
+/// The different kinds of agent
+///
+/// See <https://wiki.eveuniversity.org/Agent#Category> for information about the various kinds of Agent
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="agentTypes"))]
+#[cfg_attr(feature="docs_export", doc_sde(rename="AgentType"))]
 struct AgentTypeEntry {
+    /// Identifier for this AgentType
     #[serde(rename="_key")]
     agentTypeID: ids::AgentTypeID,
+    /// Name for this AgentType
     name: AgentType
 }
-
-/// Agent (Mission NPC) that is located in space, rather than docked in a station
-///
-/// Additional Agent information is contained in [`NpcCharacter`] data
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct AgentInSpace {
-    /// CharacterID for this agent
-    #[serde(rename="_key")]
-    pub agentID: ids::CharacterID,
-    /// 'Dungeon' within which the agent is located
-    ///
-    /// Data about dungeons is not available for EVE 3rd party developers
-    pub dungeonID: ids::DungeonID,
-    /// SolarSystem in which the Agent is located
-    pub solarSystemID: ids::SolarSystemID,
-    /// Spawnpoint for agent, no data available for EVE 3rd party developers
-    pub spawnPointID: ids::SpawnPointID,
-    /// TypeID of the agent's ship (Note: Agent Ships are not the same as the player-flyable ship, and have different TypeIDs)
-    pub typeID: ids::TypeID
-}
-
-impl_map_collect!(ids::CharacterID, AgentInSpace, agentID);
 
 /// Character Ancestry; Now-unused character creation element (Removed from player character creation 2021-03-02)
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="ancestries"))]
 pub struct Ancestry {
-    /// Identifier for this Ancestry, see [`ids::AncestryID`]
+    /// Identifier for this Ancestry
     #[serde(rename="_key")]
     pub ancestryID: ids::AncestryID,
     /// Bloodline this ancestry is a part of
@@ -352,12 +369,30 @@ pub struct Ancestry {
 
 impl_map_collect!(ids::AncestryID, Ancestry, ancestryID);
 
+/// Dungeon Archetype
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="archetypes"))]
+pub struct Archetype {
+    /// ID for this Archetype
+    #[serde(rename="_key")]
+    pub archetypeID: ids::DungeonArchetypeID,
+    /// Title; Kind of sites in this archetype
+    pub title: Option<LocalizedString>,
+    /// Text description of this archetype
+    pub description: LocalizedString
+}
+
+impl_map_collect!(ids::DungeonArchetypeID, Archetype, archetypeID);
+
 /// Character Bloodline; Character creation element
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="bloodlines"))]
 pub struct Bloodline {
-    /// Identifier for this Bloodline, see [`ids::BloodlineID`]
+    /// Identifier for this Bloodline
     #[serde(rename="_key")]
     pub bloodlineID: ids::BloodlineID,
     /// Default NPC Corporation for characters with this Bloodline
@@ -391,6 +426,7 @@ impl_map_collect!(ids::BloodlineID, Bloodline, bloodlineID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="blueprints"))]
 pub struct Blueprint {
     /// Key; Blueprint TypeID. Duplicate of explicit `blueprintTypeID` field in entry. This library current favours using the explicit field, this may change.
     /// In the event this is de-duplicated by removing the entry field this field will be renamed to [`Blueprint::blueprintTypeID`] to retain backwards compatibility.
@@ -399,7 +435,7 @@ pub struct Blueprint {
     blueprintTypeID_key: ids::TypeID,
     /// TypeID of this blueprint. BP Originals and BP Copies share the same TypeID.
     pub blueprintTypeID: ids::TypeID,
-    /// The maximum amount of job runs that can be "printed" on a single blueprint copy
+    /// The maximum amount of job runs that a single blueprint copy can have
     ///
     /// This is not the limit of repeats that can be scheduled in a single manufacturing/copying/etc job.
     pub maxProductionLimit: i32,
@@ -411,6 +447,7 @@ pub struct Blueprint {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct BlueprintActivities {
     /// Blueprint copying activity. When present on blueprint types, only applicable to blueprint *originals*
     pub copying: Option<BPActivity>,
@@ -420,7 +457,7 @@ pub struct BlueprintActivities {
     pub research_time: Option<BPActivity>,
     /// Material Efficiency Research activity. When present on blueprint types, only applicable to blueprint *originals*
     pub research_material: Option<BPActivity>,
-    /// Invention activity. When present on blueprint types, only applicable to blueprint *copies*. Also applicable to Sleeper Relics
+    /// Invention activity. Applicable to Sleeper Relics and blueprint *copies* but not blueprint originals.
     pub invention: Option<BPActivity>,
     /// Reaction activity
     pub reaction: Option<BPActivity>,
@@ -444,32 +481,56 @@ impl IntoIterator for BlueprintActivities {
 }
 
 
-/// Blueprint activity
+/// A single [`Blueprint`] activity
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(external_type))]
 pub struct BPActivity {
     /// Materials and quantity required for one run of this activity
-    #[serde(deserialize_with="deserialize_activity_materials", default)]
+    #[cfg_attr(feature="docs_export", doc_sde(alias_type="Vec<BPProduct>"))]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_activity_materials")]
     pub materials: IndexMap<ids::TypeID, u32>,
     /// Products, quantity, and optional probability for one run of this activity.
     /// Only one product type is allowed per run of this activity; When multiple types of products are available, one must be selected by the player when setting up the industry job
-    #[serde(deserialize_with="deserialize_activity_products", default)]
+    #[cfg_attr(feature="docs_export", doc_sde(alias_type="Vec<BPProduct>"))]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_activity_products")]
     pub products: IndexMap<ids::TypeID, (u32, Option<f64>)>,
     /// Skills required to set up a run of this activity
-    #[serde(deserialize_with="deserialize_activity_skills", default)]
+    #[cfg_attr(feature="docs_export", doc_sde(alias_type="Vec<BPSkill>"))]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_activity_skills")]
     pub skills: IndexMap<ids::TypeID, values::SkillLevel>,
     /// Time required for one run of this activity, in seconds
     pub time: u32
 }
-fn deserialize_activity_materials<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, u32>, D::Error> {
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    pub struct BPMaterial {
-        typeID: ids::TypeID,
-        quantity: u32
-    }
 
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+struct BPMaterial {
+    typeID: ids::TypeID,
+    quantity: u32
+}
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+struct BPProduct {
+    typeID: ids::TypeID,
+    quantity: u32,
+    probability: Option<f64>
+}
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct BPSkill {
+    typeID: ids::TypeID,
+    level: values::SkillLevel,
+}
+
+fn deserialize_activity_materials<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, u32>, D::Error> {
     pub struct MaterialVisitor;
     impl<'de> Visitor<'de> for MaterialVisitor {
         type Value = IndexMap<ids::TypeID, u32>;
@@ -491,14 +552,6 @@ fn deserialize_activity_materials<'de, D: Deserializer<'de>>(deserializer: D) ->
     deserializer.deserialize_seq(MaterialVisitor)
 }
 fn deserialize_activity_products<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, (u32, Option<f64>)>, D::Error> {
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    pub struct BPProduct {
-        typeID: ids::TypeID,
-        quantity: u32,
-        probability: Option<f64>
-    }
-
     pub struct ProductVisitor;
     impl<'de> Visitor<'de> for ProductVisitor {
         type Value = IndexMap<ids::TypeID, (u32, Option<f64>)>;
@@ -520,13 +573,6 @@ fn deserialize_activity_products<'de, D: Deserializer<'de>>(deserializer: D) -> 
     deserializer.deserialize_seq(ProductVisitor)
 }
 fn deserialize_activity_skills<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, values::SkillLevel>, D::Error> {
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    pub struct BPSkill {
-        typeID: ids::TypeID,
-        level: values::SkillLevel,
-    }
-
     pub struct SkillVisitor;
     impl<'de> Visitor<'de> for SkillVisitor {
         type Value = IndexMap<ids::TypeID, values::SkillLevel>;
@@ -555,6 +601,7 @@ impl_map_collect!(ids::TypeID, Blueprint, blueprintTypeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="categories"))]
 pub struct Category {
     /// ID for this category
     #[serde(rename="_key")]
@@ -574,6 +621,7 @@ impl_map_collect!(ids::CategoryID, Category, categoryID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="certificates"))]
 pub struct Certificate {
     /// ID for this certificate
     #[serde(rename="_key")]
@@ -588,13 +636,15 @@ pub struct Certificate {
     #[serde(default)]
     pub recommendedFor: Vec<ids::TypeID>,
     /// Skill levels for this certificate
-    #[serde(rename="skillTypes", deserialize_with="deserialize_inline_entry_map")]
+    #[serde(rename="skillTypes")]
+    #[serde(deserialize_with="deserialize_inline_entry_map")]
     pub skillLevels: IndexMap<ids::TypeID, CertificateSkillLevels>
 }
 
 /// Skill levels required for a certificate level
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct CertificateSkillLevels {
     /// Skill this 'levels' data is for
     #[serde(rename="_key")]
@@ -623,11 +673,12 @@ impl_map_collect!(ids::CertificateID, Certificate, certificateID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="characterAttributes"))]
 pub struct CharacterAttribute {
     /// ID for this character attribute
     #[serde(rename="_key")]
     pub characterAttributeID: ids::CharacterAttributeID,
-    /// Name
+    /// Name, as displayed on the character sheet
     pub name: LocalizedString,
     /// Description, in English
     pub description: String,
@@ -641,27 +692,49 @@ pub struct CharacterAttribute {
 
 impl_map_collect!(ids::CharacterAttributeID, CharacterAttribute, characterAttributeID);
 
-/// Information about Alpha clones
+/// Character skill training Attribute
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="characterAttributes"))]
+pub struct CharacterTitle {
+    /// ID for this character attribute
+    #[serde(rename="_key")]
+    pub characterTitleID: uuids::CharacterTitleID,
+    /// Title text, as displayed on the character sheet
+    pub name: LocalizedString
+}
+
+impl_map_collect!(uuids::CharacterTitleID, CharacterTitle, characterTitleID);
+
+/// Information about Alpha clones
+/// Currently there is one entry for each of the 4 races' Alpha Clones, but the entries are the same; Each character race is allowed to train the same skills, including ships of the other races
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="cloneGrades"))]
 pub struct CloneGrade {
     /// ID for this clone grade
     #[serde(rename="_key")]
     pub cloneGradeID: ids::CloneGradeID,
     /// Name (Not displayed in-game)
     pub name: String,
+    /// Skills that may be trained by this clone grade
     #[serde(deserialize_with="deserialize_clonegrade_skills")]
+    #[cfg_attr(feature="docs_export", doc_sde(alias_type="Vec<CloneSkill>"))]
     pub skills: IndexMap<ids::TypeID, values::SkillLevel>
 }
-fn deserialize_clonegrade_skills<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, values::SkillLevel>, D::Error> {
-    #[derive(Debug, Deserialize)]
-    #[allow(non_snake_case)]
-    pub struct CloneSkill {
-        typeID: ids::TypeID,
-        level: values::SkillLevel,
-    }
 
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+struct CloneSkill {
+    /// Skill typeID
+    typeID: ids::TypeID,
+    /// Maximum skill level that may be trained
+    level: values::SkillLevel,
+}
+fn deserialize_clonegrade_skills<'de, D: Deserializer<'de>>(deserializer: D) -> Result<IndexMap<ids::TypeID, values::SkillLevel>, D::Error> {
     pub struct SkillVisitor;
     impl<'de> Visitor<'de> for SkillVisitor {
         type Value = IndexMap<ids::TypeID, values::SkillLevel>;
@@ -685,24 +758,29 @@ fn deserialize_clonegrade_skills<'de, D: Deserializer<'de>>(deserializer: D) -> 
 
 impl_map_collect!(ids::CloneGradeID, CloneGrade, cloneGradeID);
 
+/// Information about ore/gas/ice compression
+/// Ore compression has a 1:1 input output ratio, N units of 'oreTypeID' yield N units of 'compressedTypeID'
+/// Volume ratio is provided by `compressedType.volume / oreType.volume`
+/// For ore and ice, compression is lossless. Gas must be decompressed before use, where some losses are had. (Depending on skills & facility used)
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
-pub struct CompressibleOre {
-    /// Ore typeID
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="compressibleTypes"))]
+pub struct CompressibleType {
+    /// Ore (input) typeID
     #[serde(rename="_key")]
-    pub typeID: ids::TypeID,
+    pub oreTypeID: ids::TypeID,
     /// Compressed ore (output) typeID
     pub compressedTypeID: ids::TypeID
 }
 
-
-impl_map_collect!(ids::TypeID, ids::TypeID, CompressibleOre, fn |c| (c.typeID, c.compressedTypeID));
+impl_map_collect!(ids::TypeID, ids::TypeID, CompressibleType, fn |c| (c.oreTypeID, c.compressedTypeID));
 
 /// Contraband status information for a [`Type`]
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="contrabandTypes"))]
 pub struct ContrabandType {
     /// Type for which this Contraband information applies
     #[serde(rename="_key")]
@@ -716,6 +794,7 @@ pub struct ContrabandType {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct ContrabandFactionInfo {
     /// Faction for which this info applies
     #[serde(rename="_key")]
@@ -744,6 +823,7 @@ impl_map_collect!(ids::TypeID, ContrabandType, typeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="controlTowerResources"))]
 pub struct ControlTowerResources {
     /// TypeID of the Control Tower type this information applies to
     #[serde(rename="_key")]
@@ -756,6 +836,7 @@ pub struct ControlTowerResources {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct ControlTowerResourceInfo {
     /// Purpose for which this resource is required. (Either Online operation or Reinforcement)
     pub purpose: ResourcePurpose,
@@ -763,13 +844,14 @@ pub struct ControlTowerResourceInfo {
     pub quantity: u32,
     /// Type of the required resource
     pub resourceTypeID: ids::TypeID,
-    /// If set, this resource is only required if operating in the Faction's space
+    /// If set, this resource is only required if operating in the specified Faction's space
     pub factionID: Option<ids::FactionID>,
     /// If set, this resource is only required if operating above the specified security level
     pub minSecurityLevel: Option<f64>
 }
 
 #[repr(u8)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 #[derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ResourcePurpose {
     /// Resource required for keeping a Control Tower online
@@ -805,6 +887,7 @@ impl_map_collect!(ids::TypeID, ControlTowerResources, towerTypeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="corporationActivities"))]
 pub struct CorporationActivity {
     /// ID for this activity
     #[serde(rename="_key")]
@@ -819,6 +902,7 @@ impl_map_collect!(ids::CorporationActivityID, CorporationActivity, corporationAc
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dbuffCollections"))]
 pub struct WarfareBuff {
     /// ID for this warfare buff. Referenced by attributes on Command Burst charges
     #[serde(rename="_key")]
@@ -911,6 +995,7 @@ fn deserialize_warfarebuff_location_modifiers<'de, D: Deserializer<'de>>(deseria
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub enum WarfareBuffAggregateMode {
     /// If multiple buffs stack, the maximum value is selected
     Maximum,
@@ -924,6 +1009,7 @@ pub enum WarfareBuffAggregateMode {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub enum WarfareBuffOperation {
     // Dogma is weird and complicated, so no individual docs on these
     PostMul, PostPercent, ModAdd, PreAssignment, PostAssignment
@@ -933,6 +1019,7 @@ pub enum WarfareBuffOperation {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub enum WarfareBuffUIMode {
     /// Buff amount is not shown
     Hide,
@@ -946,6 +1033,7 @@ pub enum WarfareBuffUIMode {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct WarfareBuffLocationGroupModifier {
     /// Attribute source for effect
     pub dogmaAttributeID: ids::AttributeID,
@@ -957,6 +1045,7 @@ pub struct WarfareBuffLocationGroupModifier {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct WarfareBuffLocationRequiredSkillModifier {
     /// Attribute source for effect
     pub dogmaAttributeID: ids::AttributeID,
@@ -971,6 +1060,7 @@ impl_map_collect!(ids::WarfareBuffID, WarfareBuff, warfareBuffID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dogmaAttributeCategories"))]
 pub struct AttributeCategory {
     /// ID for this category
     #[serde(rename="_key")]
@@ -987,15 +1077,16 @@ impl_map_collect!(ids::AttributeCategoryID, AttributeCategory, attributeCategory
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dogmaAttributes"))]
 pub struct Attribute {
     /// ID for this attribute
     #[serde(rename="_key")]
     pub attributeID: ids::AttributeID,
-    /// (Optional) [`AttributeCategory`] for this attribute
+    /// [`AttributeCategory`] for this attribute
     pub attributeCategoryID: Option<ids::AttributeCategoryID>,
-    /// Unknown
+    /// ???
     pub chargeRechargeTimeID: Option<u32>,
-    /// Unknown
+    /// ???
     pub dataType: i32,
     /// Default implied value if an attribute is not explicitly given for a type
     pub defaultValue: f64,
@@ -1023,7 +1114,8 @@ pub struct Attribute {
     pub tooltipTitle: Option<LocalizedString>,
     /// Tooltip description, as displayed when hovering over an attribute in-game
     pub tooltipDescription: Option<LocalizedString>,
-    /// [`EVEUnit`] for this attribute's values
+    /// Unit for this attribute's values
+    #[cfg_attr(feature="docs_export", doc_sde(alias_type="Option<ids::UnitID>"))]
     pub unitID: Option<EVEUnit>,
 }
 
@@ -1033,6 +1125,7 @@ impl_map_collect!(ids::AttributeID, Attribute, attributeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dogmaEffects"))]
 pub struct Effect {
     /// ID for this effect
     #[serde(rename="_key")]
@@ -1045,7 +1138,7 @@ pub struct Effect {
     pub description: Option<LocalizedString>,
     /// (Unused) If set to true, auto-repeat of this module is disabled
     pub disallowAutoRepeat: bool,
-    /// "Displayname" for effect, shown in-game for only some effects
+    /// Display name for effect, as shown in-game
     pub displayName: Option<LocalizedString>,
     /// Graphic related ID. Not documented here.
     pub guid: Option<String>,
@@ -1098,6 +1191,7 @@ pub struct Effect {
 #[derive(Debug, Serialize, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct ModifierInfo {
     pub domain: String,
     pub func: String,
@@ -1112,36 +1206,65 @@ pub struct ModifierInfo {
 impl_map_collect!(ids::EffectID, Effect, effectID);
 
 /// Unit of measurement used in EVE Online, see [`EVEUnit`] for details
+/// For formatting values with units, use [`EVEUnit::format`]
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dogmaUnits"))]
 pub struct DogmaUnit {
     /// UnitID for this unit, encoded as an [`EVEUnit`] enum
     ///
     /// EVEUnit provides formatting functions
     #[serde(rename="_key")]
     pub unitID: EVEUnit,
-    /// Name of this unit, or it's measure.
+    /// Name of this unit, a unit or it's associated measure.
     pub name: String,
     /// Description of this unit, either the full name of the unit ("Kilogram per cubic meter") or a short description of the unit and it's purpose
     pub description: Option<LocalizedString>,
     /// Displayed text snippet, usually the short symbol for the unit
-    ///
-    /// For formatting values with units, use [`EVEUnit::format`] via [`DogmaUnit::unitID`]
     pub displayName: Option<LocalizedString>,
 }
 
 impl_map_collect!(EVEUnit, DogmaUnit, unitID);
 
+/// Dungeon, Mission/Anomaly instance
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dungeons"))]
+pub struct Dungeon {
+    /// ID for this dungeon
+    #[serde(rename="_key")]
+    pub dungeonID: ids::DungeonID,
+    /// Archetype this dungeon belongs to
+    pub archetypeID: ids::DungeonArchetypeID,
+    /// Name for this dungeon, as shown in-game
+    pub name: LocalizedString,
+    /// Description for this dungeon, shown in pop-up on entry(?)
+    pub description: Option<LocalizedString>,
+    /// Description for this dungeon, shown in pop-up on entry(?)
+    pub gameplayDescription: Option<LocalizedString>,
+    /// Ships allowed to enter this dungeon (Usually locked out by an acceleration gate)
+    pub allowedShipsList: Option<Vec<ids::TypeListID>>,
+    /// Associated faction
+    pub factionID: Option<ids::FactionID>
+}
+
+impl_map_collect!(ids::DungeonID, Dungeon, dungeonID);
+
+
 /// Dynamic attributes for a [`Type`], used for Mutaplasmids.
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="dynamicItemAttributes"))]
 pub struct DynamicItemAttributes {
     /// Mutaplasmid typeID
     #[serde(rename="_key")]
     pub mutaplasmidTypeID: ids::TypeID,
     /// Attributes modified by this mutaplasmid
+    ///
+    /// Upon application of the mutaplasmid, a random roll is made between `max` and `min` to generate the value multiplier
     #[serde(deserialize_with="deserialize_inline_entry_map")]
     pub attributeIDs: IndexMap<ids::AttributeID, DynamicAttributeInfo>,
     /// "IOMapping"; Describes which types the mutaplasmid can be applied to, and the resulting output type.
@@ -1152,6 +1275,7 @@ pub struct DynamicItemAttributes {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct DynamicAttributeInfo {
     /// AttributeID that is modified by mutaplasmid
     #[serde(rename="_key")]
@@ -1161,8 +1285,6 @@ pub struct DynamicAttributeInfo {
     /// [`Attribute`]s also have their own `highIsGood` field
     pub highIsGood: Option<bool>,   // TODO: Add default value? TODO: Check if this ever deviates from the attribute's value
     /// Maximum multiplier for attribute value
-    ///
-    /// Upon application of the mutaplasmid, a random roll is made between `max` and `min` to generate the value multiplier
     pub max: f64,
     /// Minimum multiplier for attribute value
     pub min: f64
@@ -1180,6 +1302,7 @@ impl InlineEntry<ids::AttributeID> for DynamicAttributeInfo {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct DynamicItemAttributesIOMapping {
     /// List of typeIDs the parent mutaplasmid can be applied to
     pub applicableTypes: Vec<ids::TypeID>,
@@ -1195,6 +1318,7 @@ impl_map_collect!(ids::TypeID, DynamicItemAttributes, mutaplasmidTypeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="factions"))]
 pub struct Faction {
     /// FactionID
     #[serde(rename="_key")]
@@ -1226,182 +1350,11 @@ pub struct Faction {
 }
 
 impl_map_collect!(ids::FactionID, Faction, factionID);
-
-/// Job type for a freelance AIR opportunities job
-#[derive(Debug, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
-pub enum JobType {
-    /// Boost another (specified) player's shield HP
-    BoostShield,
-    /// Capture FW complex
-    CaptureFWComplex,
-    /// Damage player ships
-    DamageShip,
-    /// Defend FW complex
-    DefendFWComplex,
-    /// Deliver (provide) item
-    DeliverItem,
-    /// Destroy player ships
-    KillCapsuleer,
-    /// Destroy NPC ships
-    KillNPC,
-    /// Mine (but not hand over) ore
-    MineOre,
-    /// Repair another (specified) player's armour HP
-    RepairArmor,
-    /// Ship insurance; Pays out on own ship's destruction
-    ///
-    /// Automatic form of player-run "Ship Replacement Programs"
-    ShipInsurance
-}
-
-/// Multiplier of contribution payout
-///
-/// Used for 'insurance' job type to determine % of ship value that will be reimbursed
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct ContributionMultiplier {
-    /// Title of this option in the job creation menu
-    pub title: LocalizedString,
-    /// Description of this option in the job creation menu
-    ///
-    /// Shown in-game when hovering over the (i) info button
-    pub description: LocalizedString,
-    /// Placeholder text if no value is set in the input
-    pub unsetDescription: LocalizedString,
-    /// Icon for this option
-    pub iconID: String,
-    /// Default value set in this option
-    pub defaultValue: f64,
-    /// Maximum value allowed for this option
-    pub maxValue: f64,
-    /// Minimum value allowed for this option
-    pub minValue: f64,
-}
-
-/// Standard contribution option
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct ContributionInfo {
-    /// Title of this option in the job creation menu
-    pub title: LocalizedString,
-    /// Description of this option in the job creation menu
-    ///
-    /// Shown in-game when hovering over the (i) info button
-    pub description: LocalizedString,
-    /// Placeholder text if no value is set in the input
-    pub unsetDescription: LocalizedString,
-    /// Icon for this option
-    pub iconID: String
-}
-
-/// Title and description for a boolean job schema parameter
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameterBooleanOption {
-    pub title: LocalizedString,
-    pub description: LocalizedString,
-}
-
-/// Boolean-type parameter
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameterBoolean {
-    pub choiceLabel: LocalizedString,
-    pub default: bool,
-    pub description: LocalizedString,
-    pub iconID: String,
-    pub optionFalse: JobSchemaParameterBooleanOption,
-    pub optionTrue: JobSchemaParameterBooleanOption,
-    pub title: LocalizedString
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameterItemDeliveryLocation {
-    pub acceptedValueTypes: Vec<String>,
-    pub description: LocalizedString,
-    pub iconID: String,
-    pub maxEntries: f64,
-    pub title: LocalizedString,
-    pub unsetDescription: LocalizedString
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameterItemDeliveryInventoryType {
-    pub acceptedValueTypes: Vec<String>,
-    pub description: LocalizedString,
-    pub iconID: String,
-    pub title: LocalizedString,
-    pub unsetDescription: LocalizedString
-}
-
-/// Delivery-type parameter
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameterItemDelivery {
-    pub deliveryLocation: JobSchemaParameterItemDeliveryLocation,
-    pub description: LocalizedString,
-    pub iconID: String,
-    pub inventoryType: JobSchemaParameterItemDeliveryInventoryType,
-    pub title: LocalizedString
-}
-
-/// Matcher-type parameter
-///
-/// Restricts in which places
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameterMatcher {
-    pub acceptedValueTypes: Vec<String>,    // TODO: Turn into enumset?
-    pub description: LocalizedString,
-    pub iconID: String,
-    pub maxEntries: f64,
-    pub optional: bool,
-    pub title: LocalizedString,
-    #[serde(rename="type")]
-    pub matcher_type: String,
-    pub unsetDescription: LocalizedString
-}
-
-/// Parameters (other options)
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-#[serde(deny_unknown_fields)]
-pub struct JobSchemaParameter {
-    /// Parameter name
-    ///
-    /// Parameter type is stored in one of the fields below
-    #[serde(rename="_key")]
-    pub parameter_type: String,
-    /// Boolean-type parameter
-    pub boolean: Option<JobSchemaParameterBoolean>,
-    /// Delivery-type parameter
-    pub itemDelivery: Option<JobSchemaParameterItemDelivery>,
-    /// Matcher-type parameter
-    ///
-    /// Restricts in which places
-    pub matcher: Option<JobSchemaParameterMatcher>,
-}
-
-impl InlineEntry<String> for JobSchemaParameter {
-    fn key(&self) -> String {
-        self.parameter_type.clone()
-    }
-}
-
 /// Freelance job schema, describes the possible kinds of freelance job
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="freelanceJobSchemas"))]
 pub struct FreelanceJobSchema {
     /// Type of job this schema describes
     #[serde(rename="_key")]
@@ -1435,10 +1388,192 @@ pub struct FreelanceJobSchema {
     pub parameters: IndexMap<String, JobSchemaParameter>
 }
 
+/// Job type for a freelance AIR opportunities job
+#[derive(Debug, Deserialize, Eq, PartialEq, Hash, Copy, Clone)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub enum JobType {
+    /// Boost another (specified) player's shield HP
+    BoostShield,
+    /// Capture FW complex
+    CaptureFWComplex,
+    /// Damage player ships
+    DamageShip,
+    /// Defend FW complex
+    DefendFWComplex,
+    /// Deliver (provide) item
+    DeliverItem,
+    /// Destroy player ships
+    KillCapsuleer,
+    /// Destroy NPC ships
+    KillNPC,
+    /// Mine (but not hand over) ore
+    MineOre,
+    /// Repair another (specified) player's armour HP
+    RepairArmor,
+    /// Ship insurance; Pays out on own ship's destruction
+    ///
+    /// Automatic form of player-run "Ship Replacement Programs"
+    ShipInsurance
+}
+
+/// Multiplier of contribution payout
+///
+/// Used for 'insurance' job type to determine % of ship value that will be reimbursed
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct ContributionMultiplier {
+    /// Title of this option in the job creation menu
+    pub title: LocalizedString,
+    /// Description of this option in the job creation menu
+    ///
+    /// Shown in-game when hovering over the (i) info button
+    pub description: LocalizedString,
+    /// Placeholder text if no value is set in the input
+    pub unsetDescription: LocalizedString,
+    /// Icon for this option
+    pub iconID: String,
+    /// Default value set in this option
+    pub defaultValue: f64,
+    /// Maximum value allowed for this option
+    pub maxValue: f64,
+    /// Minimum value allowed for this option
+    pub minValue: f64,
+}
+
+/// Standard contribution option
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct ContributionInfo {
+    /// Title of this option in the job creation menu
+    pub title: LocalizedString,
+    /// Description of this option in the job creation menu
+    ///
+    /// Shown in-game when hovering over the (i) info button
+    pub description: LocalizedString,
+    /// Placeholder text if no value is set in the input
+    pub unsetDescription: LocalizedString,
+    /// Icon for this option
+    pub iconID: String
+}
+
+/// Parameters (other options)
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameter {
+    /// Parameter name
+    ///
+    /// Parameter type is stored in one of the fields below
+    #[serde(rename="_key")]
+    pub parameter_type: String,
+    /// Boolean-type parameter
+    pub boolean: Option<JobSchemaParameterBoolean>,
+    /// Delivery-type parameter
+    pub itemDelivery: Option<JobSchemaParameterItemDelivery>,
+    /// Matcher-type parameter
+    ///
+    /// Restricts in which places
+    pub matcher: Option<JobSchemaParameterMatcher>,
+}
+
+impl InlineEntry<String> for JobSchemaParameter {
+    fn key(&self) -> String {
+        self.parameter_type.clone()
+    }
+}
+
+/// Title and description for a boolean job schema parameter
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameterBooleanOption {
+    pub title: LocalizedString,
+    pub description: LocalizedString,
+}
+
+/// Boolean-type parameter
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameterBoolean {
+    pub choiceLabel: LocalizedString,
+    pub default: bool,
+    pub description: LocalizedString,
+    pub iconID: String,
+    pub optionFalse: JobSchemaParameterBooleanOption,
+    pub optionTrue: JobSchemaParameterBooleanOption,
+    pub title: LocalizedString
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameterItemDeliveryLocation {
+    pub acceptedValueTypes: Vec<String>,
+    pub description: LocalizedString,
+    pub iconID: String,
+    pub maxEntries: f64,
+    pub title: LocalizedString,
+    pub unsetDescription: LocalizedString
+}
+
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameterItemDeliveryInventoryType {
+    pub acceptedValueTypes: Vec<String>,
+    pub description: LocalizedString,
+    pub iconID: String,
+    pub title: LocalizedString,
+    pub unsetDescription: LocalizedString
+}
+
+/// Delivery-type parameter
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameterItemDelivery {
+    pub deliveryLocation: JobSchemaParameterItemDeliveryLocation,
+    pub description: LocalizedString,
+    pub iconID: String,
+    pub inventoryType: JobSchemaParameterItemDeliveryInventoryType,
+    pub title: LocalizedString
+}
+
+/// Matcher-type parameter
+///
+/// Restricts in which places
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+pub struct JobSchemaParameterMatcher {
+    pub acceptedValueTypes: Vec<String>,    // TODO: Turn into enumset?
+    pub description: LocalizedString,
+    pub iconID: String,
+    pub maxEntries: f64,
+    pub optional: bool,
+    pub title: LocalizedString,
+    #[serde(rename="type")]
+    pub matcher_type: String,
+    pub unsetDescription: LocalizedString
+}
+
 /// 3D Graphics information, such as metadata for models+textures
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="graphics"))]
 pub struct Graphic {
     /// ID for this graphic
     #[serde(rename="_key")]
@@ -1451,7 +1586,7 @@ pub struct Graphic {
     pub sofFactionName: Option<String>,
     /// Hull name for a ship, drone, etc. Determines model
     pub sofHullName: Option<String>,
-    /// ??? Unknown
+    /// ???
     #[serde(default)]
     pub sofLayout: Vec<String>,
     /// Matersial set for model
@@ -1469,6 +1604,7 @@ impl_map_collect!(ids::GraphicID, Graphic, graphicID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="groups"))]
 pub struct Group {
     /// ID for this group
     #[serde(rename="_key")]
@@ -1487,7 +1623,7 @@ pub struct Group {
     pub name: LocalizedString,
     /// Whether this group is visible to players in-game
     pub published: bool,
-    /// Whether types in this group should use the base price
+    /// ???
     pub useBasePrice: bool,
 }
 
@@ -1498,6 +1634,7 @@ impl_map_collect!(ids::GroupID, Group, groupID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="icons"))]
 pub struct Icon {
     /// ID for this icon
     #[serde(rename="_key")]
@@ -1508,10 +1645,12 @@ pub struct Icon {
 
 impl_map_collect!(ids::IconID, Icon, iconID);
 
+
 /// Landmark in the game world
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="landmarks"))]
 pub struct Landmark {
     /// ID for this landmark
     #[serde(rename="_key")]
@@ -1535,6 +1674,7 @@ impl_map_collect!(ids::LandmarkID, Landmark, landmarkID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapAsteroidBelts"))]
 pub struct AsteroidBelt {
     /// ID for this asteroid belt, unique for each belt in the game
     #[serde(rename="_key")]
@@ -1589,6 +1729,7 @@ impl AsteroidBelt {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct AsteroidBeltStatistics {
     pub density: f64,
     pub eccentricity: f64,
@@ -1606,10 +1747,12 @@ pub struct AsteroidBeltStatistics {
 
 impl_map_collect!(ids::AsteroidBeltID, AsteroidBelt, asteroidBeltID);
 
+
 /// Constellation of solarsystems
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapConstellations"))]
 pub struct Constellation {
     /// ID for this constellation
     #[serde(rename="_key")]
@@ -1641,6 +1784,7 @@ impl_map_collect!(ids::ConstellationID, Constellation, constellationID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapMoons"))]
 pub struct Moon {
     /// ID for this moon
     #[serde(rename="_key")]
@@ -1698,6 +1842,7 @@ impl Moon {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct MoonStatistics {
     pub density: f64,
     pub eccentricity: f64,
@@ -1718,6 +1863,7 @@ pub struct MoonStatistics {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct MoonAttributes {
     pub heightMap1: u32,
     pub heightMap2: u32,
@@ -1726,10 +1872,12 @@ pub struct MoonAttributes {
 
 impl_map_collect!(ids::MoonID, Moon, moonID);
 
+
 /// Planet
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapPlanet"))]
 pub struct Planet {
     /// ID for this planet
     #[serde(rename="_key")]
@@ -1799,6 +1947,7 @@ impl Planet {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct PlanetStatistics {
     pub density: f64,
     pub eccentricity: f64,
@@ -1819,6 +1968,7 @@ pub struct PlanetStatistics {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct PlanetAttributes {
     pub heightMap1: u32,
     pub heightMap2: u32,
@@ -1828,10 +1978,12 @@ pub struct PlanetAttributes {
 
 impl_map_collect!(ids::PlanetID, Planet, planetID);
 
+
 /// Region of constellations
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapRegions"))]
 pub struct Region {
     /// ID for this region
     #[serde(rename="_key")]
@@ -1858,12 +2010,14 @@ pub struct Region {
 
 impl_map_collect!(ids::RegionID, Region, regionID);
 
+
 /// Wormhole effect "2nd star" (Red Giant, Magnetar, etc)
 ///
 /// Consists of both a star object and an effect beacon. The star object is the same for all wormholes of the same type, while the effect beacon differs with the class and type of the wormhole.
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapSecondarySuns"))]
 pub struct SecondarySun {
     /// CelestialID for the star object
     #[serde(rename="_key")]
@@ -1884,12 +2038,14 @@ impl FromIterator<SecondarySun> for IndexMap<ids::SolarSystemID, SecondarySun> {
     }
 }
 
+
 /// Solarsystem, a single in-game star system
 ///
 /// Terminology note: "SolarSystem" is the term for star systems within EVE Online third party development. Players usually use the term "system"
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapSolarSystems"))]
 pub struct SolarSystem {
     /// ID for this solarsystem
     #[serde(rename="_key")]
@@ -2012,6 +2168,7 @@ impl SolarSystem {
 
 impl_map_collect!(ids::SolarSystemID, SolarSystem, solarSystemID);
 
+
 /// Stargate connecting systems
 ///
 /// Each connection has two entries, one for the stargate in each system.
@@ -2020,6 +2177,7 @@ impl_map_collect!(ids::SolarSystemID, SolarSystem, solarSystemID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapStargates"))]
 pub struct Stargate {
     /// ID for this stargate
     #[serde(rename="_key")]
@@ -2057,6 +2215,7 @@ impl Stargate {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct StargateDestination {
     pub solarSystemID: ids::SolarSystemID,
     pub stargateID: ids::StargateID
@@ -2064,12 +2223,14 @@ pub struct StargateDestination {
 
 impl_map_collect!(ids::StargateID, Stargate, stargateID);
 
+
 /// Star
 ///
 /// most but not all systems have a central star
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mapStars"))]
 pub struct Star {
     /// ID for this star
     #[serde(rename="_key")]
@@ -2088,6 +2249,7 @@ pub struct Star {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct StarStatistics {
     pub age: f64,
     pub life: f64,
@@ -2098,6 +2260,7 @@ pub struct StarStatistics {
 
 impl_map_collect!(ids::StarID, Star, starID);
 
+
 /// Market group
 ///
 /// Market groups form a hierarchical tree, with child-groups having their "parentGroupID" field set to the marketGroupID of their parent.
@@ -2106,6 +2269,7 @@ impl_map_collect!(ids::StarID, Star, starID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="marketGroups"))]
 pub struct MarketGroup {
     /// ID for this market group
     #[serde(rename="_key")]
@@ -2124,9 +2288,24 @@ pub struct MarketGroup {
 
 impl_map_collect!(ids::MarketGroupID, MarketGroup, marketGroupID);
 
+
 /// Ship mastery info
 #[derive(Debug)]
 #[allow(non_snake_case)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="masteries"))]
+#[cfg_attr(feature="docs_export", doc_sde(override=r###"
+# Ship mastery information
+Mastery:
+    # Ship typeID this mastery information applies to
+    !!key shipID: TypeID (integer)
+    levels: {
+        # Mastery level, with level 1 at `0` and level 5 at `4`
+        # Level "0" mastery in game are the base required skills for the ship, obtained through the "required Skill" type Attributes
+        integer:
+            # List of required Certificates for this level
+            [CertificateID (integer)]
+    }
+"###))]
 pub struct MasteryInfo {
     /// Certificates required to reach level 1 mastery
     ///
@@ -2192,28 +2371,32 @@ impl<'de> Deserialize<'de> for MasteryInfo {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="mercenaryTacticalOperations"))]
 pub struct MercenaryTacticalOperation {
     /// ID for this operation
     #[serde(rename="_key")]
-    pub operation_id: ids::MercOperationID,
+    pub operation_id: ids::DungeonID,
     /// Anarchy score modifier if this event is successfully completed
-    pub anarchy_impact: i32,
+    pub anarchyImpact: i32,
     /// Development score modifier if this event is successfully completed
-    pub development_impact: i32,
+    pub developmentImpact: i32,
     /// Infomorph production modifier if this event is successfully completed
-    pub infomorph_bonus: i32,
+    pub infomorphBonus: i32,
+    /// [`Dungeon`] to which this event applies
+    pub dungeonID: ids::DungeonID,
     /// Operation name
     pub name: LocalizedString,
     /// Operation description
     pub description: LocalizedString
 }
 
-impl_map_collect!(ids::MercOperationID, MercenaryTacticalOperation, operation_id);
+impl_map_collect!(ids::DungeonID, MercenaryTacticalOperation, operation_id);
 
 /// Metagroup or "tech tier" for [`Type`]s
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="metaGroup"))]
 pub struct MetaGroup {
     /// ID for this metagroup
     #[serde(rename="_key")]
@@ -2234,6 +2417,7 @@ pub struct MetaGroup {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct MetaGroupColor {
     /// Red channel, in range 0-1
     pub r: f64,
@@ -2249,6 +2433,7 @@ impl_map_collect!(ids::MetaGroupID, MetaGroup, metaGroupID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="npcCharacters"))]
 pub struct NpcCharacter {
     /// CharacterID for this NPC
     #[serde(rename="_key")]
@@ -2276,7 +2461,8 @@ pub struct NpcCharacter {
     /// NPC school
     pub schoolID: Option<ids::SchoolID>,
     /// Skills this NPC has
-    #[serde(default, deserialize_with = "deserialize_npc_skill")]
+    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_npc_skill")]
     pub skills: Vec<ids::TypeID>,
     /// NPC speciality
     pub specialityID: Option<ids::SpecialtyID>,
@@ -2323,6 +2509,7 @@ fn deserialize_npc_skill<'de, D: Deserializer<'de>>(deserializer: D) -> Result<V
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct NpcCharacterAgent {
     /// Agent type
     pub agentTypeID: ids::AgentTypeID,
@@ -2336,7 +2523,8 @@ pub struct NpcCharacterAgent {
 
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
-#[serde(from = "bool")]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
+#[serde(from="bool")]
 pub enum NpcCharacterGender {
     Male,
     Female
@@ -2359,6 +2547,7 @@ impl_map_collect!(ids::CharacterID, NpcCharacter, characterID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="npcCorporationDivisions"))]
 pub struct CorporationDivision {
     /// ID for this division
     #[serde(rename="_key")]
@@ -2381,6 +2570,7 @@ impl_map_collect!(ids::DivisionID, CorporationDivision, divisionID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="npcCorporations"))]
 pub struct NpcCorporation {
     /// ID for this corporation
     #[serde(rename="_key")]
@@ -2402,10 +2592,12 @@ pub struct NpcCorporation {
     /// Not applicable as players cannot join NPC corporations other than the school/default one
     pub allowedMemberRaces: Option<Vec<ids::RaceID>>,
     /// Corporation trades
-    #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_explicit_entry_map")]
     pub corporationTrades: IndexMap<ids::TypeID, f64>,  // TODO: Document how these values work
     /// Divisions of this corporation
-    #[serde(default, deserialize_with="deserialize_inline_entry_map")]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_inline_entry_map")]
     pub divisions: IndexMap<ids::DivisionID, NpcCorporationDivision>,
     /// Faction this corporation is a part of
     pub factionID: Option<ids::FactionID>,
@@ -2414,7 +2606,8 @@ pub struct NpcCorporation {
     /// Primary ally for Fwar corporations, or "lore" business partner for other corporations
     pub friendID: Option<ids::CorporationID>,
     /// ???
-    #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_explicit_entry_map")]
     pub exchangeRates: IndexMap<ids::CorporationID, f64>,
     /// ???
     pub extent: String, // TODO: Enum
@@ -2427,7 +2620,8 @@ pub struct NpcCorporation {
     /// ???
     pub initialPrice: f64,
     /// Current shareholders (Other NPC corps, lore information?)
-    #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_explicit_entry_map")]
     pub investors: IndexMap<ids::CorporationID, i32>,
     /// Loyalty point trades offered by this company
     ///
@@ -2447,7 +2641,7 @@ pub struct NpcCorporation {
     pub minimumJoinStanding: f64,
     /// Corporation's raceID
     pub raceID: Option<ids::RaceID>,
-    /// Issues shares of this corporation ("unused" mechanic)
+    /// Issued shares of this corporation (NPC shares are unused)
     pub shares: u64,
     /// Home system of this corporation
     pub solarSystemID: Option<ids::SolarSystemID>,
@@ -2468,6 +2662,7 @@ pub struct NpcCorporation {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct NpcCorporationDivision {
     /// [`CorporationDivision`] for this division
     #[serde(rename="_key")]
@@ -2496,6 +2691,7 @@ impl_map_collect!(ids::CorporationID, NpcCorporation, corporationID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="npcStations"))]
 pub struct NpcStation {
     /// ID for this station
     #[serde(rename="_key")]
@@ -2575,6 +2771,7 @@ impl_map_collect!(ids::StationID, NpcStation, stationID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="planetResources"))]
 pub struct PlanetResource {
     /// PlanetID to which this resource info applies
     #[serde(rename="_key")]
@@ -2591,6 +2788,7 @@ pub struct PlanetResource {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct PlanetReagent {
     /// Reagent typeID
     pub type_id: ids::TypeID,
@@ -2614,6 +2812,7 @@ impl_map_collect!(ids::PlanetID, PlanetResource, planet_id);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="planetSchematics"))]
 pub struct PlanetSchematic {
     /// ID for this schematic
     #[serde(rename="_key")]
@@ -2627,7 +2826,7 @@ pub struct PlanetSchematic {
     /// (Named "pins" for their visual similarity to a push-pin/tack put into the planet)
     pub pins: Vec<ids::TypeID>,
     /// Input-output types
-    #[serde(default, deserialize_with="deserialize_inline_entry_map")]
+    #[serde(deserialize_with="deserialize_inline_entry_map")]
     pub types: IndexMap<ids::TypeID, PlanetSchematicType>   // This _really_ should be parsed into separate input-output mappings, but that is hard to implement with serde
 }
 
@@ -2635,6 +2834,7 @@ pub struct PlanetSchematic {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct PlanetSchematicType {
     /// TypeID
     #[serde(rename="_key")]
@@ -2657,6 +2857,7 @@ impl_map_collect!(ids::PlanetSchematicID, PlanetSchematic, schematicID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="races"))]
 pub struct CharacterRace {
     /// ID for this character race
     #[serde(rename="_key")]
@@ -2670,7 +2871,8 @@ pub struct CharacterRace {
     /// "Rookie Ship" / Corvette for player characters of this race
     pub shipTypeID: Option<ids::TypeID>, // Corvette/"Rookie ship"
     /// "Default" skills all players characters of this race already have upon starting the game
-    #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_explicit_entry_map")]
     pub skills: IndexMap<ids::TypeID, values::SkillLevel>
 }
 
@@ -2680,6 +2882,7 @@ impl_map_collect!(ids::RaceID, CharacterRace, raceID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="skinLicenses"))]
 pub struct SkinLicense {
     /// TypeID of the license item
     ///
@@ -2704,6 +2907,7 @@ impl_map_collect!(ids::TypeID, SkinLicense, typeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="skinMaterials"))]
 pub struct SkinMaterial {
     /// ID for this material
     #[serde(rename="_key")]
@@ -2720,6 +2924,7 @@ impl_map_collect!(ids::SkinMaterialID, SkinMaterial, materialID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="skins"))]
 pub struct Skin {
     /// ID for this skin
     #[serde(rename="_key")]
@@ -2748,6 +2953,7 @@ impl_map_collect!(ids::SkinID, Skin, skinID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="sovereigntyUpgrades"))]
 pub struct SovereigntyUpgrade {
     /// TypeID for sov-upgrade item
     #[serde(rename="_key")]
@@ -2770,6 +2976,7 @@ pub struct SovereigntyUpgrade {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct SovereigntyUpgradeFuel {
     /// Fuel typeID
     pub type_id: ids::TypeID,
@@ -2785,6 +2992,7 @@ impl_map_collect!(ids::TypeID, SovereigntyUpgrade, typeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="stationOperations"))]
 pub struct StationOperation {
     /// ID for this operation
     #[serde(rename="_key")]
@@ -2800,7 +3008,8 @@ pub struct StationOperation {
     /// Station object typeID (determines model & undocks), per character race/faction.
     ///
     /// Only provided for the 4 major factions and Jove.
-    #[serde(default, deserialize_with="deserialize_explicit_entry_map")]
+    #[serde(default)]
+    #[serde(deserialize_with="deserialize_explicit_entry_map")]
     pub stationTypes: IndexMap<ids::RaceID, ids::TypeID>,
     /// ???
     pub border: f64,
@@ -2824,6 +3033,7 @@ impl_map_collect!(ids::StationOperationID, StationOperation, operationID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="stationServices"))]
 pub struct StationService { // TODO: Document icons somewhere
     /// ID for this service
     #[serde(rename="_key")]
@@ -2842,6 +3052,7 @@ impl_map_collect!(ids::StationServiceID, StationService, serviceID);
 #[derive(Debug, Deserialize, Hash, Eq, PartialEq)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="translationLanguages"))]
 pub struct TranslationLanguage {
     /// Short name (ISO 639 code)
     #[serde(rename="_key")]
@@ -2854,6 +3065,7 @@ pub struct TranslationLanguage {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="typeBonus"))]
 pub struct TypeBonuses {
     /// Item [`Type`] this bonus info is for
     #[serde(rename="_key")]
@@ -2863,7 +3075,9 @@ pub struct TypeBonuses {
     /// Skill bonuses, per level
     ///
     /// Displayed first
-    #[serde(default, rename = "types", deserialize_with="deserialize_explicit_entry_map")]
+    #[serde(default)]
+    #[serde(rename = "types")]
+    #[serde(deserialize_with="deserialize_explicit_entry_map")]
     pub skillBonuses: IndexMap<ids::TypeID, Vec<TypeBonus>>,
     /// Misc bonuses, used for effect beacons and T3 Destroyers
     ///
@@ -2881,6 +3095,7 @@ pub struct TypeBonuses {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct TypeBonus {
     /// Bonus importance
     pub importance: i32,
@@ -2902,6 +3117,7 @@ impl_map_collect!(ids::TypeID, TypeBonuses, typeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="typeDogma"))]
 pub struct TypeDogma {
     /// Applicable type
     #[serde(rename="_key")]
@@ -2981,12 +3197,86 @@ fn deserialize_type_effects<'de, D: Deserializer<'de>>(deserializer: D) -> Resul
 
 impl_map_collect!(ids::TypeID, TypeDogma, typeID);
 
+/// TypeList; List of types
+#[derive(Debug, Deserialize)]
+#[allow(non_snake_case)]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="typeLists"))]
+pub struct TypeList {
+    /// ID for this type list
+    pub typeListID: ids::TypeID,
+    /// Display Name for this typeList (as used in-game, such as "Common Ores")
+    pub displayName: Option<LocalizedString>,
+    /// Display Description for this typeList (as used in-game, such as "<b>Tech 1</b> and empire faction <b>Navy</b> ships of <b>Battleship size or smaller</b>." for acceleration gate restrictions)
+    pub displayDescription: Option<LocalizedString>,
+    /// "Developer" name
+    pub name: String,
+    /// Included typeIDs, may be overridden by excluded typeIDs
+    #[serde(default)]
+    pub includedTypeIDs: Vec<ids::TypeID>,
+    /// Excluded typeIDs, overrides included typeIDs
+    #[serde(default)]
+    pub excludedTypeIDs: Vec<ids::TypeID>,
+    /// Included groupIDs, may be overridden by excluded groupIDs
+    #[serde(default)]
+    pub includedGroupIDs: Vec<ids::GroupID>,
+    /// Excluded groupIDs, overrides included groupIDs
+    #[serde(default)]
+    pub excludedGroupIDs: Vec<ids::GroupID>,
+    /// Included categoryIDs, may be overridden by excluded categoryIDs
+    #[serde(default)]
+    pub includedCategoryIDs: Vec<ids::CategoryID>,
+    /// Excluded categoryIDs, overrides included categoryIDs
+    #[serde(default)]
+    pub excludedCategoryIDs: Vec<ids::CategoryID>,
+}
+
+impl TypeList {
+
+    /// Test if a given type is contained in this TypeList.
+    ///
+    /// # Arguments
+    ///
+    /// * `item_type`: TypeID for the type to lookup
+    /// * `item_group`: GroupID for the type to lookup (Obtained through [`Type::groupID`])
+    /// * `item_category`: CategoryID for the type to lookup (Obtained through [`Group::categoryID`])
+    ///
+    /// returns: bool; True if this list contains the specified type
+    pub fn contains(&self, item_type: ids::TypeID, item_group: ids::GroupID, item_category: ids::CategoryID) -> bool {
+        (
+            (
+                (
+                    (
+                        self.includedCategoryIDs.contains(&item_category)
+                            && !self.excludedCategoryIDs.contains(&item_category)
+                    ) || self.includedGroupIDs.contains(&item_group)
+                ) && self.excludedGroupIDs.contains(&item_group)
+            ) || self.includedTypeIDs.contains(&item_type)
+        ) && !self.excludedTypeIDs.contains(&item_type)
+    }
+
+    pub fn flatten<C: Fn(ids::CategoryID) -> IG, G: Fn(ids::GroupID) -> IT, IG: IntoIterator<Item=ids::GroupID>, IT: IntoIterator<Item=ids::TypeID>>(&self, category_groups: C, group_types: G) -> impl Iterator<Item=ids::TypeID> {
+        self.includedCategoryIDs.iter().copied()
+            .filter(|c| !self.excludedCategoryIDs.contains(c))
+            .flat_map(category_groups)
+            .chain(self.includedGroupIDs.iter().copied())
+            .filter(|g| !self.excludedGroupIDs.contains(g))
+            .flat_map(group_types)
+            .chain(self.includedTypeIDs.iter().copied())
+            .filter(|t| !self.excludedTypeIDs.contains(t))
+    }
+}
+
+impl_map_collect!(ids::TypeListID, TypeList, typeListID);
+
+
 /// Type reprocessing output
 ///
 /// To reprocess an item, a stack of [`Type::portionSize`] units is required
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="typeMaterials"))]
 pub struct TypeMaterials {
     /// Input/reprocessed typeID
     #[serde(rename="_key")]
@@ -3005,6 +3295,7 @@ pub struct TypeMaterials {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct TypeMaterial {
     /// Result output [`Type`]
     pub materialTypeID: ids::TypeID,
@@ -3018,6 +3309,7 @@ pub struct TypeMaterial {
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(internal_type))]
 pub struct TypeRandomMaterial {
     /// Result output [`Type`]
     pub materialTypeID: ids::TypeID,
@@ -3033,6 +3325,7 @@ impl_map_collect!(ids::TypeID, TypeMaterials, typeID);
 #[derive(Debug, Deserialize)]
 #[allow(non_snake_case)]
 #[serde(deny_unknown_fields)]
+#[cfg_attr(feature="docs_export", doc_sde(sde_file="types"))]
 pub struct Type {
     /// ID for this type
     #[serde(rename="_key")]
@@ -3047,7 +3340,7 @@ pub struct Type {
     pub description: Option<LocalizedString>,
     /// Cargo capacity, in m³
     pub capacity: Option<f64>,
-    /// Meta group; Tech tier of thhis item. Defaults to `1` or "Tech 1" if unspecified.
+    /// Meta group; Tech tier of this item. Defaults to `1` or "Tech 1" if unspecified.
     pub metaGroupID: Option<ids::MetaGroupID>,
     /// Meta level; Ordinal ranking of types
     pub metaLevel: Option<values::MetaLevel>,
@@ -3104,11 +3397,13 @@ pub struct SDE_Full {
     pub agent_types: IndexMap<ids::AgentTypeID, AgentType>,
     pub agents_in_space: IndexMap<ids::CharacterID, AgentInSpace>,
     pub ancestries: IndexMap<ids::AncestryID, Ancestry>,
+    pub archetypes: IndexMap<ids::DungeonArchetypeID, Archetype>,
     pub bloodlines: IndexMap<ids::BloodlineID, Bloodline>,
     pub blueprints: IndexMap<ids::TypeID, Blueprint>,
     pub categories: IndexMap<ids::CategoryID, Category>,
     pub certificates: IndexMap<ids::CertificateID, Certificate>,
     pub character_attributes: IndexMap<ids::CharacterAttributeID, CharacterAttribute>,
+    pub character_titles: IndexMap<uuids::CharacterTitleID, CharacterTitle>,
     pub clone_grades: IndexMap<ids::CloneGradeID, CloneGrade>,
     pub compressible_types: IndexMap<ids::TypeID, ids::TypeID>,
     pub contraband_types: IndexMap<ids::TypeID, ContrabandType>,
@@ -3119,6 +3414,7 @@ pub struct SDE_Full {
     pub dogma_attributes: IndexMap<ids::AttributeID, Attribute>,
     pub dogma_effects: IndexMap<ids::EffectID, Effect>,
     pub dogma_units: IndexMap<EVEUnit, DogmaUnit>,
+    pub dungeons: IndexMap<ids::DungeonID, Dungeon>,
     pub dynamic_item_attributes: IndexMap<ids::TypeID, DynamicItemAttributes>,
     pub factions: IndexMap<ids::FactionID, Faction>,
     pub freelance_job_schemas: IndexMap<ids::JobSchemaID, Vec<FreelanceJobSchema>>,
@@ -3137,7 +3433,7 @@ pub struct SDE_Full {
     pub map_stars: IndexMap<ids::StarID, Star>,
     pub market_groups: IndexMap<ids::MarketGroupID, MarketGroup>,
     pub masteries: IndexMap<ids::TypeID, MasteryInfo>,
-    pub mercenary_tactical_operations: IndexMap<ids::MercOperationID, MercenaryTacticalOperation>,
+    pub mercenary_tactical_operations: IndexMap<ids::DungeonID, MercenaryTacticalOperation>,
     pub meta_groups: IndexMap<ids::MetaGroupID, MetaGroup>,
     pub npc_characters: IndexMap<ids::CharacterID, NpcCharacter>,
     pub npc_corporation_divisions: IndexMap<ids::DivisionID, CorporationDivision>,
@@ -3234,6 +3530,16 @@ impl<R: Read + Seek> SDELoader<R> {
         self.load_ancestries()?.collect()
     }
 
+    /// Load 'archetypes' as iterator
+    pub fn load_archetypes(&mut self) -> Result<impl Iterator<Item=Result<Archetype, SDELoadError>>, SDELoadError> {
+        self.load_file::<Archetype>("archetypes.jsonl")
+    }
+
+    /// Load 'archetypes' as map
+    pub fn load_archetypes_map(&mut self) -> Result<IndexMap<ids::DungeonArchetypeID, Archetype>, SDELoadError> {
+        self.load_archetypes()?.collect()
+    }
+
     /// Load 'bloodlines' as iterator
     pub fn load_bloodlines(&mut self) -> Result<impl Iterator<Item=Result<Bloodline, SDELoadError>>, SDELoadError> {
         self.load_file::<Bloodline>("bloodlines.jsonl")
@@ -3284,6 +3590,16 @@ impl<R: Read + Seek> SDELoader<R> {
         self.load_character_attributes()?.collect()
     }
 
+    /// Load 'characterTitles' as iterator
+    pub fn load_character_titles(&mut self) -> Result<impl Iterator<Item=Result<CharacterTitle, SDELoadError>>, SDELoadError> {
+        self.load_file::<CharacterTitle>("characterTitles.jsonl")
+    }
+
+    /// Load 'characterTitles' as map
+    pub fn load_character_titles_map(&mut self) -> Result<IndexMap<uuids::CharacterTitleID, CharacterTitle>, SDELoadError> {
+        self.load_character_titles()?.collect()
+    }
+
     /// Load 'cloneGrades' as iterator
     pub fn load_clone_grades(&mut self) -> Result<impl Iterator<Item=Result<CloneGrade, SDELoadError>>, SDELoadError> {
         self.load_file::<CloneGrade>("cloneGrades.jsonl")
@@ -3295,8 +3611,8 @@ impl<R: Read + Seek> SDELoader<R> {
     }
 
     /// Load 'compressibleTypes' as iterator
-    pub fn load_compressible_types(&mut self) -> Result<impl Iterator<Item=Result<CompressibleOre, SDELoadError>>, SDELoadError> {
-        self.load_file::<CompressibleOre>("compressibleTypes.jsonl")
+    pub fn load_compressible_types(&mut self) -> Result<impl Iterator<Item=Result<CompressibleType, SDELoadError>>, SDELoadError> {
+        self.load_file::<CompressibleType>("compressibleTypes.jsonl")
     }
 
     /// Load 'compressibleTypes' as map
@@ -3388,6 +3704,16 @@ impl<R: Read + Seek> SDELoader<R> {
     /// You probably want [`EVEUnit`] directly
     pub fn load_dogma_units_map(&mut self) -> Result<IndexMap<EVEUnit, DogmaUnit>, SDELoadError> {
         self.load_dogma_units()?.collect()
+    }
+
+    /// Load 'dungeons' as iterator
+    pub fn load_dungeons(&mut self) -> Result<impl Iterator<Item=Result<Dungeon, SDELoadError>>, SDELoadError> {
+        self.load_file::<Dungeon>("dungeons.jsonl")
+    }
+
+    /// Load 'dungeons' as map
+    pub fn load_dungeons_map(&mut self) -> Result<IndexMap<ids::DungeonID, Dungeon>, SDELoadError> {
+        self.load_dungeons()?.collect()
     }
 
     /// Load 'dynamicItemAttributes' as iterator
@@ -3580,7 +3906,7 @@ impl<R: Read + Seek> SDELoader<R> {
     }
 
     /// Load 'mercenaryTacticalOperations' as map
-    pub fn load_merc_tactical_operations_map(&mut self) -> Result<IndexMap<ids::MercOperationID, MercenaryTacticalOperation>, SDELoadError> {
+    pub fn load_merc_tactical_operations_map(&mut self) -> Result<IndexMap<ids::DungeonID, MercenaryTacticalOperation>, SDELoadError> {
         self.load_merc_tactical_operations()?.collect()
     }
 
@@ -3778,11 +4104,13 @@ impl<R: Read + Seek> SDELoader<R> {
             agent_types: self.load_agent_types_map()?,
             agents_in_space: self.load_agents_in_space_map()?,
             ancestries: self.load_ancestries_map()?,
+            archetypes: self.load_archetypes_map()?,
             bloodlines: self.load_bloodlines_map()?,
             blueprints: self.load_blueprints_map()?,
             categories: self.load_categories_map()?,
             certificates: self.load_certificates_map()?,
             character_attributes: self.load_character_attributes_map()?,
+            character_titles: self.load_character_titles_map()?,
             clone_grades: self.load_clone_grades_map()?,
             compressible_types: self.load_compressible_types_map()?,
             contraband_types: self.load_contraband_types_map()?,
@@ -3793,6 +4121,7 @@ impl<R: Read + Seek> SDELoader<R> {
             dogma_attributes: self.load_dogma_attributes_map()?,
             dogma_effects: self.load_dogma_effects_map()?,
             dogma_units: self.load_dogma_units_map()?,
+            dungeons: self.load_dungeons_map()?,
             dynamic_item_attributes: self.load_dynamic_item_attributes_map()?,
             factions: self.load_factions_map()?,
             freelance_job_schemas: self.load_freelance_job_schemas_map()?,

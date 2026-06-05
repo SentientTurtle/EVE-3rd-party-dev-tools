@@ -72,7 +72,7 @@ impl Display for IconError {
             IconError::Cache(err) => Display::fmt(err, f),
             IconError::IO(err) => Display::fmt(err, f),
             IconError::Image(err) => Display::fmt(err, f),
-            IconError::Magick(err) => write!(f, "error in call to image magick {}", err),
+            IconError::Magick(err) => write!(f, "error in call to imagemagick {}", err),
             IconError::String(msg) => Display::fmt(msg, f)
         }
     }
