@@ -7,6 +7,7 @@ repository = "https://github.com/SentientTurtle/EVE-3rd-party-dev-tools"
 
 [dependencies]
 evesharedcache = { path = "../evesharedcache" }
+evestaticdata = { path = "../evestaticdata" }
 reqwest = { version = "0.13.4", features = ["blocking"] }
 zip = "8.6.0"
 image = "0.25.10"

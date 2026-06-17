@@ -5,11 +5,11 @@ use std::fs::File;
 use evestaticdata::sde::load::SDELoader;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
-    // let version = sde::update::update_sde("./temp/sde.zip")?;
+    // let version = evestaticdata::sde::update::update_sde("./temp/sde.zip")?;
     // println!("{}", version);
-    SDELoader::new(File::open("./temp/eve-online-static-data-jsonl.zip")?)?.full()?;
-
-    return Ok(());
+    // SDELoader::new(File::open("./temp/sde.zip")?)?.full()?;
+    //
+    // return Ok(());
     let mut version = SdeVersion::fetch_latest()?;
     println!("Latest: {}", version.build_number());
 

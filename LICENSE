@@ -2,6 +2,7 @@ Certain files in this repository are subject to the EVE Online Developer License
 * evestaticdata/src/sde/sqlite/invFlags.sql
 * evestaticdata/src/sde/sqlite/ramActivities.sql
 * (parts of) evestaticdata/src/hardcoded.rs
+* (parts of) eveicongenerator/src/rsc/
 
 Materials accessed by the code in this repository are subject to the EVE Online Developer License Agreement - https://developers.eveonline.com/license-agreement
 

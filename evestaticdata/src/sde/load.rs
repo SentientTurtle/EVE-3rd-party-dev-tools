@@ -3460,6 +3460,15 @@ pub struct SDELoader<R: Read + Seek = File> {
     archive: ZipArchive<R>
 }
 
+impl SDELoader<File> {
+    /// Updates the specified file to the latest version of the SDE, then opens it and returns a `SDELoader`
+    #[cfg(feature="sde_load")]
+    pub fn open_latest<P: AsRef<std::path::Path>>(file: P) -> Result<Self, SDELoadError> {
+        crate::sde::update::update_sde(file.as_ref())?;
+        Self::new(File::open(file)?)
+    }
+}
+
 impl<R: Read + Seek> SDELoader<R> {
     pub fn new(reader: R) -> Result<Self, SDELoadError> {
         Ok(SDELoader {

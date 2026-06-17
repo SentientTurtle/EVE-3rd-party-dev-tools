@@ -1,4 +1,3 @@
-#![feature(exit_status_error)]
 #![feature(iter_intersperse)]
 #![feature(iter_collect_into)]
 
@@ -6,8 +5,7 @@ pub const CRATE_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const CRATE_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 pub const CRATE_REPO: &'static str = env!("CARGO_PKG_REPOSITORY");
 
-use crate::icons::{IconBuildData, IconError, OutputMode};
-use crate::sde::update_sde;
+use crate::icons::{IconBuildData, IconConfig, IconError, OutputMode};
 use evesharedcache::cache::CacheDownloader;
 use std::time::Instant;
 use std::{fs, io};
@@ -17,9 +15,9 @@ use std::sync::OnceLock;
 use clap::{Arg, ArgAction, Command};
 use clap::builder::ValueParser;
 use std::io::Write;
+use evestaticdata::sde::load::SDELoader;
 
 pub mod icons;
-pub mod sde;
 
 static LOG_FILE: OnceLock<File> = OnceLock::new();
 
@@ -89,10 +87,18 @@ fn do_main() -> Result<(), IconError> {
                 .long("skip_if_fresh")
                 .help("If icons are unchanged, skip output")
                 .action(ArgAction::SetTrue),
-            Arg::new("use_magick")
-                .long("use_magick")
-                .help("Use imagemagick 7 for image compositing")
-                .action(ArgAction::SetTrue)
+            Arg::new("old_overlays")
+                .long("old_overlays")
+                .help("Use the old-style glossy overlays for tech-tiers & other info")
+                .action(ArgAction::SetTrue),
+            Arg::new("module_overlays")
+                .long("module_overlays")
+                .help("Add fitting-slot overlays")
+                .action(ArgAction::SetTrue),
+            Arg::new("clone_overlays")
+                .long("clone_overlays")
+                .help("Add clone restriction overlays (CUSTOM)")
+                .action(ArgAction::SetTrue),
         ])
         .subcommand_required(true)
         .subcommands([
@@ -327,6 +333,12 @@ fn do_main() -> Result<(), IconError> {
     let silent_mode = arg_matches.get_flag("silent"); // icons::build_icon_export overrides this to `true` if "checksum to stdout" is present
     let skip_if_fresh = arg_matches.get_flag("skip_if_fresh");
 
+    let icon_config = IconConfig {
+        use_old_overlays: arg_matches.get_flag("old_overlays"),
+        module_overlays: arg_matches.get_flag("module_overlays"),
+        clone_overlays: arg_matches.get_flag("clone_overlays"),
+    };
+
     let start = Instant::now();
     if !silent_mode { println!("Initializing cache (UA:`{}`)", user_agent); }
     if let Some(mut log) = log_file { writeln!(log, "Initializing cache (UA:`{}`)", user_agent)?; }
@@ -338,20 +350,9 @@ fn do_main() -> Result<(), IconError> {
     let cache_init_duration = start.elapsed();
 
     let data_load_start = Instant::now();
-    let icon_build_data = {
-        if !silent_mode { println!("Loading SDE..."); }
-        if let Some(mut log) = log_file { writeln!(log, "Loading SDE...")?; }
-        let mut sde = update_sde(silent_mode)?;
-
-        IconBuildData::new(
-            sde::read_types(&mut sde, silent_mode)?.into_iter().collect(),
-            sde::read_group_categories(&mut sde, silent_mode)?,
-            sde::read_icons(&mut sde, silent_mode)?,
-            sde::read_graphics(&mut sde, silent_mode)?,
-            sde::read_skin_materials(&mut sde, silent_mode)?
-        )
-    };
-
+    if !silent_mode { println!("Loading SDE..."); }
+    if let Some(mut log) = log_file { writeln!(log, "Loading SDE...")?; }
+    let icon_build_data = IconBuildData::load(SDELoader::open_latest("./cache/sde.zip")?, icon_config)?;
     let data_load_duration = data_load_start.elapsed();
 
     if !silent_mode { println!("Building icons..."); }
@@ -359,13 +360,13 @@ fn do_main() -> Result<(), IconError> {
 
     let build_start = Instant::now();
     let (added, removed) = icons::build_icon_export(
+        icon_config,
         output_mode,
         skip_if_fresh,
         &icon_build_data,
         &cache,
         arg_matches.get_one::<PathBuf>("icon_folder").expect("icon_folder is a required argument"),
         arg_matches.get_flag("force_rebuild"),
-        arg_matches.get_flag("use_magick"),
         silent_mode
     )?;
 
