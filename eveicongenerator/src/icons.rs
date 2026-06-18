@@ -213,6 +213,8 @@ pub struct IconBuildData {
 
 impl IconBuildData {
     pub fn load(mut loader: SDELoader, icon_config: IconConfig) -> Result<IconBuildData, SDELoadError> {
+        let group_categories = { loader.load_groups()?.map(|g_res| g_res.map(|g| (g.groupID, g.categoryID))).collect::<Result<HashMap<_, _>, _>>()? };
+
         Ok(Self {
             types: {
                 let mut types = HashMap::<ids::TypeID, TypeInfo>::new();
@@ -257,21 +259,26 @@ impl IconBuildData {
                             if type_dogma.dogmaEffects.contains_key(&3772) { item_type.module_slot = Some(ModuleSlot::Subsystem); }
 
                             if icon_config.clone_overlays {
-                                const SKILL_ATTRIBUTES: [ids::AttributeID; 6] = [182, 183, 184, 1285, 1289, 1290];
-                                const LEVEL_ATTRIBUTES: [ids::AttributeID; 6] = [277, 278, 279, 1286, 1287, 1288];
+                                // For skills, set requirement directly. For other items, determine requirement from required skills
+                                if group_categories.get(&item_type.group_id) == Some(&16) {
+                                    item_type.omega_required = Some(!alpha_skills.contains_key(&type_dogma.typeID))
+                                } else {
+                                    const SKILL_ATTRIBUTES: [ids::AttributeID; 6] = [182, 183, 184, 1285, 1289, 1290];
+                                    const LEVEL_ATTRIBUTES: [ids::AttributeID; 6] = [277, 278, 279, 1286, 1287, 1288];
 
-                                let mut skill_required = false;
-                                let mut omega_required = false;
+                                    let mut skill_required = false;
+                                    let mut omega_required = false;
 
-                                for i in 0..6 {
-                                    if let (Some(skill), Some(level)) = (type_dogma.dogmaAttributes.get(&SKILL_ATTRIBUTES[i]), type_dogma.dogmaAttributes.get(&LEVEL_ATTRIBUTES[i])) {
-                                        skill_required = true;
-                                        omega_required |= alpha_skills.get(&(*skill as ids::TypeID)).is_none_or(|alpha_level | *alpha_level < (*level as u8));
+                                    for i in 0..6 {
+                                        if let (Some(skill), Some(level)) = (type_dogma.dogmaAttributes.get(&SKILL_ATTRIBUTES[i]), type_dogma.dogmaAttributes.get(&LEVEL_ATTRIBUTES[i])) {
+                                            skill_required = true;
+                                            omega_required |= alpha_skills.get(&(*skill as ids::TypeID)).is_none_or(|alpha_level| *alpha_level < (*level as u8));
+                                        }
                                     }
-                                }
 
-                                if skill_required {
-                                    item_type.omega_required = Some(omega_required)
+                                    if skill_required {
+                                        item_type.omega_required = Some(omega_required)
+                                    }
                                 }
                             }
                         }
@@ -280,7 +287,7 @@ impl IconBuildData {
 
                 types
             },
-            group_categories: { loader.load_groups()?.map(|g_res| g_res.map(|g| (g.groupID, g.categoryID))).collect::<Result<HashMap<_, _>, _>>()? },
+            group_categories,
             icon_files: { loader.load_icons()?.map(|i_res| i_res.map(|i| (i.iconID, i.iconFile))).collect::<Result<HashMap<_, _>, _>>()? },
             graphics_folders: {
                 loader.load_graphics()?.flat_map(|g_res| {
