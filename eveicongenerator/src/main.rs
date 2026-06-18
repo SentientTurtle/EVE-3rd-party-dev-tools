@@ -1,6 +1,3 @@
-#![feature(iter_intersperse)]
-#![feature(iter_collect_into)]
-
 pub const CRATE_NAME: &'static str = env!("CARGO_PKG_NAME");
 pub const CRATE_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 pub const CRATE_REPO: &'static str = env!("CARGO_PKG_REPOSITORY");
@@ -201,7 +198,7 @@ fn do_main() -> Result<(), IconError> {
                     Arg::new("copy_files")
                         .long("copy_files")
                         .help("(web_dir) Copy image files rather than creating symlinks")
-                        .conflicts_with("hard_links")
+                        .conflicts_with("hardlink")
                         .requires("web_dir")
                         .action(ArgAction::SetTrue),
                     Arg::new("hardlink")
@@ -231,6 +228,7 @@ fn do_main() -> Result<(), IconError> {
                         .value_name("FILE")
                         .value_parser(ValueParser::path_buf()),
                     Arg::new("incl_character")
+                        .long("incl_character")
                         .help("(aux_all) Include character textures (~5GB of additional data)")
                         .requires("aux_all")
                         .action(ArgAction::SetTrue),

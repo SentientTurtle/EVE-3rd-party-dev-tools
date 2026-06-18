@@ -611,15 +611,20 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(icon_config: IconConfig
         }
     }
 
-    let mut sort_index = Vec::with_capacity(new_index.len());
-    new_index.iter().map(String::as_str).collect_into(&mut sort_index);
+    let mut sort_index = new_index.iter().map(String::as_str).collect::<Vec<_>>();
     sort_index.sort();
 
-    let index_bytes = sort_index.into_iter()
-        .intersperse("\x1E")
-        .flat_map(|str| str.as_bytes())
-        .copied()
-        .collect::<Vec<u8>>();
+    let mut index_bytes = Vec::new();
+
+    let mut first = true;
+    for item in sort_index {
+        if first {
+            first = false;
+        } else {
+            index_bytes.extend(b"\x1E");
+        }
+        index_bytes.extend(item.as_bytes())
+    }
 
     fs::write(index_path, &index_bytes)?;
 
@@ -727,7 +732,7 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(icon_config: IconConfig
                 for (type_id, icons) in &service_metadata {
                     let json_name = format!("{}.json", type_id);
                     let json_filename = out.join(&json_name);
-                    icons.keys().collect_into(&mut kind_buf);
+                    kind_buf.extend(icons.keys());
                     let json_content = serde_json::to_string(&kind_buf).map_err(io::Error::other)?;
                     kind_buf.clear();
                     if force_rebuild || old_links.get(&json_name) != Some(&json_content) {
