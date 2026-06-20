@@ -96,6 +96,10 @@ fn do_main() -> Result<(), IconError> {
                 .long("clone_overlays")
                 .help("Add clone restriction overlays (CUSTOM)")
                 .action(ArgAction::SetTrue),
+            Arg::new("no_purge")
+                .long("no_purge")
+                .help("Do not purge icon cache folder")
+                .action(ArgAction::SetTrue),
         ])
         .subcommand_required(true)
         .subcommands([
@@ -330,6 +334,7 @@ fn do_main() -> Result<(), IconError> {
 
     let silent_mode = arg_matches.get_flag("silent"); // icons::build_icon_export overrides this to `true` if "checksum to stdout" is present
     let skip_if_fresh = arg_matches.get_flag("skip_if_fresh");
+    let no_purge = arg_matches.get_flag("no_purge");
 
     let icon_config = IconConfig {
         use_old_overlays: arg_matches.get_flag("old_overlays"),
@@ -361,6 +366,7 @@ fn do_main() -> Result<(), IconError> {
         icon_config,
         output_mode,
         skip_if_fresh,
+        no_purge,
         &icon_build_data,
         &cache,
         arg_matches.get_one::<PathBuf>("icon_folder").expect("icon_folder is a required argument"),

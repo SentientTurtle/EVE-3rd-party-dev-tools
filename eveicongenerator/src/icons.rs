@@ -375,7 +375,7 @@ pub enum OutputMode<'a> {
     AuxImages { out: &'a Path, incl_character: bool }
 }
 
-pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(icon_config: IconConfig, output_modes: Vec<OutputMode>, skip_output_if_fresh: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, mut silent_mode: bool) -> Result<(usize, usize), IconError> {
+pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(icon_config: IconConfig, output_modes: Vec<OutputMode>, skip_output_if_fresh: bool, no_purge: bool, data: &IconBuildData, cache: &C, icon_dir: P, force_rebuild: bool, mut silent_mode: bool) -> Result<(usize, usize), IconError> {
     let log_file = crate::LOG_FILE.get();   // TODO: Put in a parameter
     silent_mode |= output_modes.iter().any(|mode| matches!(mode, OutputMode::Checksum { out: None }));  // If "Checksum to stdout" output mode is present, enforce silent mode
 
@@ -847,8 +847,10 @@ pub fn build_icon_export<C: SharedCache, P: AsRef<Path>>(icon_config: IconConfig
         }
     }
 
-    for filename in &to_remove {
-        fs::remove_file(icon_dir.join(filename))?;
+    if !no_purge {
+        for filename in &to_remove {
+            fs::remove_file(icon_dir.join(filename))?;
+        }
     }
 
     Ok((to_add.len(), to_remove.len()))
