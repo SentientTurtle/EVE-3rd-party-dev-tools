@@ -58,26 +58,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-      - name: Load Build cache
-        uses: actions/cache/restore@v5
+      - name: Build cache
+        uses: actions/cache@v5
         with:
           key: BuildCache
           path: ./eveicongenerator/target
       - name: Cargo Build
         working-directory: ./eveicongenerator
         run: cargo build --release  # Spending longer on compilation is generally worthwhile, as image processing in the debug build is quite slow
-      - name: Store Build cache
-        uses: actions/cache/save@v5
-        with:
-          key: BuildCache
-          path: ./eveicongenerator/target
-      - name: Load SharedCache cache
-        uses: actions/cache/restore@v5
+      - name: SharedCache cache
+        uses: actions/cache@v5
         with:
           key: SharedCache
           path: ./eveicongenerator/cache
-      - name: Load icon cache
-        uses: actions/cache/restore@v5
+      - name: Icon cache
+        uses: actions/cache@v5
         with:
           key: IconCache
           path: ./eveicongenerator/icons
@@ -90,23 +85,13 @@ jobs:
       - name: Generate Icons (Bonus)
         working-directory: ./eveicongenerator
         run: cargo run --release --package eveicongenerator --bin eveicongenerator -- -l ./log.txt --user_agent "Github Actions on behalf of ${{ github.repository }}" --no_purge --module_overlays --clone_overlays  multi --iec "./Image Export Collection - Bonus Style.zip" --service_bundle "./Service Bundle - Bonus Style.zip"
-      - name: Store SharedCache Cache
-        uses: actions/cache/save@v5
-        with:
-          key: SharedCache
-          path: ./eveicongenerator/cache
-      - name: Store icon Cache
-        uses: actions/cache/save@v5
-        with:
-          key: IconCache
-          path: ./eveicongenerator/icons
       - name: Publish
         uses: softprops/action-gh-release@v3
         with:
           tag_name: icons-${{ needs.build-number.outputs.build-number }}
           fail_on_unmatched_files: true
           working_directory: ./eveicongenerator
-          body_path: README.md
+          body_path: ./eveicongenerator/README.md
           files: |
             Image Export Collection.zip
             Service Bundle.zip
