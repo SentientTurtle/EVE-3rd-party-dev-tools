@@ -1,8 +1,6 @@
 use evestaticdata::sde::update::SdeVersion;
 use std::error::Error;
 use std::{fs};
-use std::fs::File;
-use evestaticdata::sde::load::SDELoader;
 
 pub fn main() -> Result<(), Box<dyn Error>> {
     // let version = evestaticdata::sde::update::update_sde("./temp/sde.zip")?;

@@ -105,8 +105,8 @@ jobs:
         with:
           tag_name: icons-${{ needs.build-number.outputs.build-number }}
           fail_on_unmatched_files: true
-          body: Automatically Generated Release
           working_directory: ./eveicongenerator
+          body_path: README.md
           files: |
             Image Export Collection.zip
             Service Bundle.zip

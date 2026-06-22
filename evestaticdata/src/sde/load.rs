@@ -3,21 +3,21 @@
 #[cfg(feature="docs_export")]
 use evestaticdata_macro::doc_sde;
 
-use std::error::Error;
 use crate::types::{ids, uuids, values};
+use crate::util;
+use indexmap::IndexMap;
+use serde::de::{DeserializeOwned, SeqAccess, Unexpected, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::hash::Hash;
 use std::io;
 use std::io::{BufRead, BufReader, Read, Seek};
 use std::marker::PhantomData;
-use indexmap::IndexMap;
-use serde::de::{DeserializeOwned, SeqAccess, Unexpected, Visitor};
-use zip::result::ZipError;
-use zip::ZipArchive;
 use util::units::EVEUnit;
-use crate::util;
+use zip::ZipArchive;
+use zip::result::ZipError;
 
 /// Error indicating failure to load SDE
 #[derive(Debug)]
@@ -3204,6 +3204,7 @@ impl_map_collect!(ids::TypeID, TypeDogma, typeID);
 #[cfg_attr(feature="docs_export", doc_sde(sde_file="typeLists"))]
 pub struct TypeList {
     /// ID for this type list
+    #[serde(rename="_key")]
     pub typeListID: ids::TypeID,
     /// Display Name for this typeList (as used in-game, such as "Common Ores")
     pub displayName: Option<LocalizedString>,
@@ -3250,7 +3251,7 @@ impl TypeList {
                         self.includedCategoryIDs.contains(&item_category)
                             && !self.excludedCategoryIDs.contains(&item_category)
                     ) || self.includedGroupIDs.contains(&item_group)
-                ) && self.excludedGroupIDs.contains(&item_group)
+                ) && !self.excludedGroupIDs.contains(&item_group)
             ) || self.includedTypeIDs.contains(&item_type)
         ) && !self.excludedTypeIDs.contains(&item_type)
     }
@@ -3451,13 +3452,15 @@ pub struct SDE_Full {
     pub translation_languages: Vec<TranslationLanguage>,
     pub type_bonus: IndexMap<ids::TypeID, TypeBonuses>,
     pub type_dogma: IndexMap<ids::TypeID, TypeDogma>,
+    pub type_lists: IndexMap<ids::TypeListID, TypeList>,
     pub type_materials: IndexMap<ids::TypeID, TypeMaterials>,
     pub types: IndexMap<ids::TypeID, Type>,
 }
 
 // SDELoader encapsulates ZipArchive & zip crate dependency
 pub struct SDELoader<R: Read + Seek = File> {
-    archive: ZipArchive<R>
+    archive: ZipArchive<R>,
+    build_number: u32
 }
 
 impl SDELoader<File> {
@@ -3471,9 +3474,29 @@ impl SDELoader<File> {
 
 impl<R: Read + Seek> SDELoader<R> {
     pub fn new(reader: R) -> Result<Self, SDELoadError> {
-        Ok(SDELoader {
+        let mut loader = SDELoader {
             archive: ZipArchive::new(reader)?,
-        })
+            build_number: 0
+        };
+
+        #[derive(Deserialize)]
+        #[allow(non_snake_case, unused)]
+        struct SDEVersion {
+            _key: String,
+            buildNumber: u32,
+            releaseDate: String
+        }
+
+        let sde_version = loader.load_file::<SDEVersion>("_sde.jsonl")?.next()
+            .ok_or_else(|| SDELoadError::IntegrityError("No entries in _sde.jsonl!?".to_string()))??;
+
+        loader.build_number = sde_version.buildNumber;
+
+        Ok(loader)
+    }
+
+    pub fn version(&self) -> u32 {
+        self.build_number
     }
 
     /// Load a single file from the zip archive, and parse it to a datatype
@@ -4088,6 +4111,16 @@ impl<R: Read + Seek> SDELoader<R> {
         self.load_type_dogma()?.collect()
     }
 
+    /// Load 'typelist' as iterator
+    pub fn load_type_lists(&mut self) -> Result<impl Iterator<Item=Result<TypeList, SDELoadError>>, SDELoadError> {
+        self.load_file::<TypeList>("typeLists.jsonl")
+    }
+
+    /// Load 'typelist' as map
+    pub fn load_type_lists_map(&mut self) -> Result<IndexMap<ids::TypeListID, TypeList>, SDELoadError> {
+        self.load_type_lists()?.collect()
+    }
+
     /// Load 'typeMaterials' as iterator
     pub fn load_type_materials(&mut self) -> Result<impl Iterator<Item=Result<TypeMaterials, SDELoadError>>, SDELoadError> {
         self.load_file::<TypeMaterials>("typeMaterials.jsonl")
@@ -4167,6 +4200,7 @@ impl<R: Read + Seek> SDELoader<R> {
             translation_languages: self.load_translation_languages_list()?,
             type_bonus: self.load_type_bonuses_map()?,
             type_dogma: self.load_type_dogma_map()?,
+            type_lists: self.load_type_lists_map()?,
             type_materials: self.load_type_materials_map()?,
             types: self.load_types_map()?,
         })
