@@ -61,21 +61,32 @@ jobs:
       - name: Build cache
         uses: actions/cache@v5
         with:
-          key: BuildCache
-          path: ./eveicongenerator/target
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            ./eveicongenerator/target
+          key: cargo-${{ hashFiles('./evestaticdata/Cargo.lock','./eveicongenerator/Cargo.lock') }}
+          restore-keys: |
+            cargo
       - name: Cargo Build
         working-directory: ./eveicongenerator
         run: cargo build --release  # Spending longer on compilation is generally worthwhile, as image processing in the debug build is quite slow
       - name: SharedCache cache
         uses: actions/cache@v5
         with:
-          key: SharedCache
           path: ./eveicongenerator/cache
+          key: SharedCache-$${{needs.build-number.outputs.build-number}}
+          restore-keys: |
+            SharedCache
       - name: Icon cache
         uses: actions/cache@v5
         with:
-          key: IconCache
           path: ./eveicongenerator/icons
+          key: IconCache-$${{needs.build-number.outputs.build-number}}
+          restore-keys: |
+            IconCache
       - name: Generate Icons (Accurate)
         working-directory: ./eveicongenerator
         run: cargo run --release --package eveicongenerator --bin eveicongenerator -- -l ./log.txt --user_agent "Github Actions on behalf of ${{ github.repository }}" --no_purge  multi --iec "./Image Export Collection.zip" --service_bundle "./Service Bundle.zip"
