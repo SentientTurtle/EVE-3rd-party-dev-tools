@@ -2,7 +2,7 @@ name: generate-icons.yml
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 15 * * *'
+    - cron: '42 12,15 * * *'
       timezone: 'UTC'
 
 permissions:
