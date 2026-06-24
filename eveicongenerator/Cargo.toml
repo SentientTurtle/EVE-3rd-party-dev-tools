@@ -1,14 +1,13 @@
 [package]
 name = "eveicongenerator"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 publish = false
 repository = "https://github.com/SentientTurtle/EVE-3rd-party-dev-tools"
 
 [dependencies]
 evesharedcache = { path = "../evesharedcache" }
-evestaticdata = { path = "../evestaticdata" }
-reqwest = { version = "0.13.4", features = ["blocking"] }
+evestaticdata = { path = "../evestaticdata", features = ["sde_update", "sde_load"] }
 zip = "8.6.0"
 image = "0.25.10"
 image-blend = "0.1.7"
