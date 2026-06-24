@@ -42,6 +42,12 @@ pub mod ids {
     pub type JobSchemaID = u32;
     pub type IndustryActivityID = u32;
     pub type TypeListID = u32;
+    pub type EpicArcID = u32;
+    pub type MissionID = u32;
+
+    pub type ShipTreeElementID = u32;
+    pub type ShipTreeGroupID = u32;
+    pub type SKINRComponentCategoryID = u32;
 
     // ItemIDs
     pub type ItemID = u32;
@@ -65,13 +71,15 @@ pub mod uuids {
 
     #[allow(non_camel_case_types)]
     #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash)]
-    #[derive(serde::Deserialize)]  // TODO: Make configurable depending on load feature
+    #[cfg_attr(feature="serde", derive(serde::Deserialize))]  // TODO: Make configurable depending on load feature
     pub struct EVE_UUID(
-        #[serde(with = "uuid::serde::hyphenated")]
+        #[cfg_attr(feature="serde", serde(with = "uuid::serde::hyphenated"))]
         pub Uuid
     );
 
     pub type CharacterTitleID = EVE_UUID;
+    pub type MilitaryCampaignID = EVE_UUID;
+    pub type MilitaryCampaignObjectiveID = EVE_UUID;
 }
 
 pub mod values {
