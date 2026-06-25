@@ -89,7 +89,7 @@ jobs:
             IconCache
       - name: Generate Icons (Accurate)
         working-directory: ./eveicongenerator
-        run: cargo run --release --package eveicongenerator --bin eveicongenerator -- -l ./log.txt --user_agent "Github Actions on behalf of ${{ github.repository }}" --no_purge  multi --iec "./Image Export Collection.zip" --service_bundle "./Service Bundle.zip"
+        run: cargo run --release --package eveicongenerator --bin eveicongenerator -- -l ./log.txt --user_agent "Github Actions on behalf of ${{ github.repository }}" --no_purge  multi --iec "./Image Export Collection.zip" --service_bundle "./Service Bundle.zip" --aux_shiptree "./Shiptree.zip"
       - name: Generate Icons (Old)
         working-directory: ./eveicongenerator
         run: cargo run --release --package eveicongenerator --bin eveicongenerator -- -l ./log.txt --user_agent "Github Actions on behalf of ${{ github.repository }}" --no_purge --old_overlays  multi --iec "./Image Export Collection - Old Style.zip" --service_bundle "./Service Bundle - Old Style.zip"
@@ -106,6 +106,7 @@ jobs:
           files: |
             Image Export Collection.zip
             Service Bundle.zip
+            Shiptree.zip
             Image Export Collection - Old Style.zip
             Service Bundle - Old Style.zip
             Image Export Collection - Bonus Style.zip

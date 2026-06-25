@@ -84,3 +84,7 @@ For full compatibility with the Fenris Creations' official Image Service the non
 * No-suffix files ("Image Export Collection.zip", "Service Bundle.zip") contain standard game-accurate icons.  
 * "Old Style" suffixed files contain icons with the old "glossy" style overlays for tech-tier.  
 * "Bonus Style" suffixed files contain icons with additional alpha/omega & module slot overlays.
+
+# Ship Tree Export
+
+Side-on Ship renders as displayed in the game's Ship Tree. Provided as semi-transparent PNG files ready for direct use or compositing.

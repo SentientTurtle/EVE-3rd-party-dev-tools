@@ -156,6 +156,17 @@ fn do_main() -> Result<(), IconError> {
                         .value_name("FILE")
                         .value_parser(ValueParser::path_buf())
                 ),
+            Command::new("aux_shiptree")
+                .about("Auxiliary Ship Tree Render dump (zip)")
+                .arg(
+                    Arg::new("out")
+                        .short('o')
+                        .long("out")
+                        .required(true)
+                        .help("Output file")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf())
+                ),
             Command::new("aux_icons")
                 .about("Auxiliary Icon dump (zip)")
                 .arg(
@@ -221,6 +232,11 @@ fn do_main() -> Result<(), IconError> {
                         .long("checksum_stout")
                         .help("Write checksum to stdout. Suppresses other stdout output")
                         .conflicts_with("checksum_file"),
+                    Arg::new("aux_shiptree")
+                        .long("aux_shiptree")
+                        .help("Output Auxiliary Ship Tree Render dump")
+                        .value_name("FILE")
+                        .value_parser(ValueParser::path_buf()),
                     Arg::new("aux_icons")
                         .long("aux_icons")
                         .help("Output Auxiliary Icon dump")
@@ -259,6 +275,7 @@ fn do_main() -> Result<(), IconError> {
             }]
         },
         "checksum" => { vec![OutputMode::Checksum { out: command_args.get_one::<PathBuf>("out").map(PathBuf::as_path) }] },
+        "aux_shiptree" => vec![OutputMode::AuxShipTreeRenders { out: &command_args.get_one::<PathBuf>("out").expect("out is required") }],
         "aux_icon" => vec![OutputMode::AuxIcons { out: &command_args.get_one::<PathBuf>("out").expect("out is required") }],
         "aux_all" => {
             vec![OutputMode::AuxImages {
@@ -284,8 +301,13 @@ fn do_main() -> Result<(), IconError> {
                     hard_link: command_args.get_flag("hardlink")
                 })
             }
+
             if let Some(out) = command_args.get_one::<PathBuf>("aux_icons") {
                 output_modes.push(OutputMode::AuxIcons { out })
+            }
+
+            if let Some(out) = command_args.get_one::<PathBuf>("aux_shiptree") {
+                output_modes.push(OutputMode::AuxShipTreeRenders { out })
             }
 
             if let Some(out) = command_args.get_one::<PathBuf>("aux_all") {
@@ -362,7 +384,7 @@ fn do_main() -> Result<(), IconError> {
     if let Some(mut log) = log_file { writeln!(log, "Building icons...")?; }
 
     let build_start = Instant::now();
-    let (added, removed) = icons::build_icon_export(
+    icons::build_icon_export(
         icon_config,
         output_mode,
         skip_if_fresh,
@@ -379,7 +401,7 @@ fn do_main() -> Result<(), IconError> {
     let s1 = format!("Finished in: {:.1} seconds", start.elapsed().as_secs_f64());
     let s2 = format!("\tCache init: {:.1} seconds", cache_init_duration.as_secs_f64());
     let s3 = format!("\tData load: {:.1} seconds", data_load_duration.as_secs_f64());
-    let s4 = format!("\tImage Build: {:.1} seconds ({} added, {} removed)", build_duration.as_secs_f64(), added, removed);
+    let s4 = format!("\tImage Build: {:.1} seconds", build_duration.as_secs_f64());
 
     if !silent_mode {
         println!("{}", s1);
