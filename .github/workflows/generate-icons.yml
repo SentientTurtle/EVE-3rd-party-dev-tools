@@ -77,14 +77,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ./eveicongenerator/cache
-          key: SharedCache-$${{needs.build-number.outputs.build-number}}
+          key: SharedCache-${{needs.build-number.outputs.build-number}}
           restore-keys: |
             SharedCache
       - name: Icon cache
         uses: actions/cache@v5
         with:
           path: ./eveicongenerator/icons
-          key: IconCache-$${{needs.build-number.outputs.build-number}}
+          key: IconCache-${{needs.build-number.outputs.build-number}}
           restore-keys: |
             IconCache
       - name: Generate Icons (Accurate)
