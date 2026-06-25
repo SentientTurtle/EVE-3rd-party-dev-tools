@@ -88,3 +88,4 @@ For full compatibility with the Fenris Creations' official Image Service the non
 # Ship Tree Export
 
 Side-on Ship renders as displayed in the game's Ship Tree. Provided as semi-transparent PNG files ready for direct use or compositing.
+Files are provided in format `[TYPE_ID].png`, only for player-flyable ships.
